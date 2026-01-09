@@ -1,0 +1,11 @@
+{
+  "name": "backend-service-monarca",
+  "version-string": "0.1.0",
+  "dependencies": [
+    "drogon",
+    "nlohmann-json",
+    "jwt-cpp",
+    "cpr",
+    "fmt"
+  ]
+}

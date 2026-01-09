@@ -1,0 +1,40 @@
+# --- Build & Salidas ---
+build/
+out/
+bin/
+lib/
+
+# --- CMake ---
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+compile_commands.json
+*.cmake
+!vcpkg.cmake
+
+# --- Vcpkg (CRÍTICO) ---
+# Ignora las librerías descargadas/compiladas
+vcpkg_installed/
+# Por si clonaste vcpkg dentro del proyecto (aunque lo tienes fuera)
+vcpkg/
+
+# --- Binarios y Objetos ---
+*.exe
+*.dll
+*.so
+*.dylib
+*.a
+*.o
+*.obj
+
+# --- Tu Ejecutable ---
+mi_backend
+
+# --- IDEs y Sistema ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*.log
