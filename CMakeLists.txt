@@ -22,6 +22,10 @@ find_package(fmt CONFIG REQUIRED)
 add_executable(MiBackendMonarca main.cc
     controllers/FinanceController.h
     controllers/FinanceController.cpp
+    controllers/SupplierController.h
+    controllers/SupplierController.cpp
+    models/Supplier.h
+    models/Supplier.cpp
 )
 
 # 5. Enlazar librerías
