@@ -2,6 +2,8 @@
 #include <string>
 #include <nlohmann/json.hpp>
 #include <mutex>
+#include <jwt-cpp/jwt.h>
+#include <jwt-cpp/traits/nlohmann-json/traits.h>
 
 // Usamos nlohmann para manipular datos JSON fácilmente
 using json = nlohmann::json;
@@ -25,6 +27,10 @@ public:
      * @return true si tuvo éxito, false si falló
      */
     bool addDocument(const std::string& collection, const std::string& docId, const json& data);
+    // ... (dentro de la clase FirebaseClient, sección public)
+
+    // Nuevo método para LEER
+    json getDocument(const std::string& collection, const std::string& docId);
 
 private:
     // Constructor privado (se llama automáticamente al inicio)

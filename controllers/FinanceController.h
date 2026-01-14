@@ -14,4 +14,7 @@ class FinanceController : public drogon::HttpController<FinanceController> {
         // Example method
         void calculateWacc(const HttpRequestPtr& req,
                            std::function<void (const HttpResponsePtr &)> &&callback);
+        // ... (dentro de la clase FirebaseClient, sección public)
+
+        
 };

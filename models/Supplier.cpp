@@ -52,5 +52,5 @@ namespace models
         s.setEmail(j.value("email", ""));
 
         return s;
-    }        
+    }  
 } // Cerramos el namespace models

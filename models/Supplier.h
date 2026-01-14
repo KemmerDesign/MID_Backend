@@ -37,6 +37,9 @@ namespace models{
 
         // Deserialization from JSON
         static Supplier fromJson(const nlohmann::json& j);
+        // ... (dentro de la clase FirebaseClient, sección public)
+
+
 
     };
 }
