@@ -17,6 +17,8 @@ find_package(nlohmann_json CONFIG REQUIRED)
 find_package(jwt-cpp CONFIG REQUIRED)
 find_package(cpr CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
+find_package(OpenSSL REQUIRED)
+find_path(PICOJSON_INCLUDE_DIRS "picojson/picojson.h")
 
 # 4. Definir el ejecutable
 add_executable(MiBackendMonarca main.cc
@@ -26,7 +28,11 @@ add_executable(MiBackendMonarca main.cc
     controllers/SupplierController.cpp
     models/Supplier.h
     models/Supplier.cpp
+    utils/FirebaseClient.h
+    utils/FirebaseClient.cpp
 )
+
+target_include_directories(MiBackendMonarca PRIVATE ${PICOJSON_INCLUDE_DIRS})
 
 # 5. Enlazar librerías
 target_link_libraries(MiBackendMonarca PRIVATE
@@ -35,4 +41,6 @@ target_link_libraries(MiBackendMonarca PRIVATE
     jwt-cpp::jwt-cpp
     cpr::cpr
     fmt::fmt
+    OpenSSL::SSL 
+    OpenSSL::Crypto
 )

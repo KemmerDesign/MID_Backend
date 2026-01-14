@@ -3,6 +3,7 @@ build/
 out/
 bin/
 lib/
+uploads/
 
 # --- CMake ---
 CMakeCache.txt
@@ -38,3 +39,10 @@ mi_backend
 Thumbs.db
 *.swp
 *.log
+
+# --- Claves y Secretos (CRÍTICO) ---
+*.json
+!vcpkg.json  # Excepción: Queremos guardar la config de dependencias
+service-account.json
+*.pem
+*.key

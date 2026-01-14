@@ -6,6 +6,8 @@
     "nlohmann-json",
     "jwt-cpp",
     "cpr",
-    "fmt"
+    "fmt",
+    "openssl",
+    "picojson"
   ]
 }
