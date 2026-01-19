@@ -56,7 +56,7 @@ namespace models
         void setActive(bool active);
         void setCreditLimit(double credit_limit);
         void setCreditDays(int credit_days);
-        void setAddresses(const std::vector<utils::Adress>& addresses);
+        void setAddresses(std::vector<utils::Adress> addresses);
     };
 
 }
