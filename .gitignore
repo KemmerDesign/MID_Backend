@@ -28,6 +28,7 @@ vcpkg/
 *.a
 *.o
 *.obj
+AUDITORIA.MD
 
 # --- Tu Ejecutable ---
 mi_backend

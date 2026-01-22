@@ -51,8 +51,11 @@ add_executable(MiBackendMonarca main.cc
     controllers/FinanceController.cpp
     controllers/SupplierController.h
     controllers/SupplierController.cpp
+    models/Client.cc
     models/Supplier.h
     models/Supplier.cpp
+    models/rawMaterial/MetalMaterial.h
+    models/rawMaterial/MetalMaterial.cc
     utils/FirebaseClient.h
     utils/FirebaseClient.cpp
 )
