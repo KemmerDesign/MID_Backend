@@ -51,6 +51,8 @@ add_executable(MiBackendMonarca main.cc
     controllers/FinanceController.cpp
     controllers/SupplierController.h
     controllers/SupplierController.cpp
+    controllers/RawMaterialControllers/MetalMaterialController.h
+    controllers/RawMaterialControllers/MetalMaterialController.cc
     models/Client.cc
     models/Supplier.h
     models/Supplier.cpp
@@ -58,6 +60,8 @@ add_executable(MiBackendMonarca main.cc
     models/rawMaterial/MetalMaterial.cc
     utils/FirebaseClient.h
     utils/FirebaseClient.cpp
+    utils/Adress.h
+    utils/Adress.cc
 )
 
 target_compile_definitions(MiBackendMonarca PRIVATE JWT_DISABLE_PICOJSON)
