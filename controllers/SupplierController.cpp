@@ -1,7 +1,7 @@
 #include "SupplierController.h"
-#include "../utils/FirebaseClient.h"  // <--- Importamos nuestro cliente
-#include <drogon/utils/Utilities.h>   // <--- Para generar IDs únicos (UUID)
-#include <trantor/utils/Date.h>       // <--- Para manejar Fechas y Horas
+#include "../utils/Database.h"
+#include <drogon/utils/Utilities.h>
+#include <trantor/utils/Date.h>
 
 // Usamos el namespace de nlohmann para facilidad
 using json = nlohmann::json;
@@ -65,10 +65,7 @@ void SupplierController::createOne(const HttpRequestPtr &req,
         // (Opcional) Aseguramos que el ID también quede dentro del documento
         data["id"] = newId; 
 
-        // 5. ¡LLAMADA A FIREBASE! 🔥
-        // Gracias a la actualización recursiva en FirebaseClient, ahora podemos pasar
-        // el objeto 'data' completo con sus arrays y objetos anidados.
-        bool saved = FirebaseClient::getInstance().addDocument("suppliers", newId, data);
+        bool saved = Database::getInstance().save("suppliers", newId, data);
 
         // 6. Responder al cliente
         auto resp = HttpResponse::newHttpResponse();
@@ -80,7 +77,7 @@ void SupplierController::createOne(const HttpRequestPtr &req,
             resp->setContentTypeCode(CT_APPLICATION_JSON);
         } else {
             resp->setStatusCode(k500InternalServerError);
-            resp->setBody("❌ Error guardando en Firebase (Revisa logs del servidor)");
+            resp->setBody("❌ Error guardando en base de datos.");
         }
         
         callback(resp);
@@ -105,17 +102,17 @@ void SupplierController::getOne(const HttpRequestPtr &req,
     #endif
     
     // Llamamos a nuestro cliente para buscar en la nube
-    json doc = FirebaseClient::getInstance().getDocument("suppliers", id);
+    auto doc = Database::getInstance().get("suppliers", id);
 
     auto resp = HttpResponse::newHttpResponse();
 
-    if (!doc.is_null() && !doc.empty()) {
+    if (doc.has_value()) {
         // ¡Éxito! Encontramos el proveedor
         #ifdef MONARCA_DEV
-            LOG_INFO << "✅ [DEV-LOG] Documento recuperado: " << doc.dump();
+            LOG_INFO << "✅ [DEV-LOG] Documento recuperado: " << doc->dump();
         #endif
         resp->setStatusCode(k200OK);
-        resp->setBody(doc.dump());
+        resp->setBody(doc->dump());
         resp->setContentTypeCode(CT_APPLICATION_JSON);
     } else {
         // No se encontró o hubo error

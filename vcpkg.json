@@ -4,10 +4,8 @@
   "dependencies": [
     "drogon",
     "nlohmann-json",
-    "jwt-cpp",
+    "sqlitecpp",
     "cpr",
-    "fmt",
-    "openssl",
-    "picojson"
+    "fmt"
   ]
 }

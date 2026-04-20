@@ -1,5 +1,5 @@
 #include "MetalMaterialController.h"
-#include "../../utils/FirebaseClient.h"
+#include "../../utils/Database.h"
 #include <drogon/utils/Utilities.h>
 #include <trantor/utils/Date.h>
 #include <string>
@@ -47,22 +47,21 @@ void MetalMaterialController::addPipeToStock(const HttpRequestPtr &req,
            << (int)width << "-" << (int)height << "-" << thickness;
         std::string skuId = ss.str();
 
-        // 4. Consultar si ya existe en Firebase
-        json existingDoc = FirebaseClient::getInstance().getDocument("stock_inventory", skuId);
+        // 4. Consultar si ya existe en BD
+        auto existingDoc = Database::getInstance().get("stock_inventory", skuId);
 
         json finalDoc;
         bool isUpdate = false;
 
-        if (existingDoc != nullptr && !existingDoc.empty() && !existingDoc.contains("error")) {
+        if (existingDoc.has_value()) {
             // A. EL MATERIAL YA EXISTE -> ACTUALIZAR (UPDATE)
             isUpdate = true;
             
             // Recuperamos la cantidad actual y sumamos la nueva
-            int currentQty = existingDoc.value("quantity_on_hand", 0);
+            int currentQty = existingDoc->value("quantity_on_hand", 0);
             int newTotal = currentQty + incomingQty;
-            
-            // Mantenemos los datos existentes, solo actualizamos lo que cambia
-            finalDoc = existingDoc; 
+
+            finalDoc = *existingDoc;
             finalDoc["quantity_on_hand"] = newTotal;
             finalDoc["updated_at"] = trantor::Date::now().toDbStringLocal();
 
@@ -97,8 +96,8 @@ void MetalMaterialController::addPipeToStock(const HttpRequestPtr &req,
             finalDoc["updated_at"] = trantor::Date::now().toDbStringLocal();
         }
 
-        // 5. Guardar en Firebase (Upsert: Crea o Sobreescribe)
-        bool saved = FirebaseClient::getInstance().addDocument("stock_inventory", skuId, finalDoc);
+        // 5. Guardar en BD (Upsert: Crea o Sobreescribe)
+        bool saved = Database::getInstance().save("stock_inventory", skuId, finalDoc);
 
         auto resp = HttpResponse::newHttpResponse();
         if (saved) {
