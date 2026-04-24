@@ -29,4 +29,5 @@ struct Project {
     static std::vector<Project>   findAll(const std::string& tenant_id,
                                           const std::string& client_id = "");
     static void submitForApproval(const std::string& project_id, const std::string& tenant_id);
+    static std::optional<Project> update(const std::string& id, const std::string& tenant_id, const json& data);
 };

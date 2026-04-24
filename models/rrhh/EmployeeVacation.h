@@ -36,4 +36,5 @@ struct EmployeeVacation {
                                                    const std::string& tenant_id,
                                                    const json& data,
                                                    const std::string& aprobado_por = "");
+    static bool remove(const std::string& id, const std::string& employee_id, const std::string& tenant_id);
 };

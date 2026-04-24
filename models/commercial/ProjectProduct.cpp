@@ -139,7 +139,7 @@ ProjectProduct ProjectProduct::create(const std::string& project_id,
     );
 
     if (!r.ok() || r.rows() == 0)
-        throw std::runtime_error(std::string("ProjectProduct::create: ") + r.errMsg());
+        throw PgException(std::string("ProjectProduct::create: ") + r.errMsg(), r.pgCode());
     return rowToProduct(r, 0);
 }
 
@@ -198,7 +198,7 @@ MaterialSuggestion ProjectProduct::addMaterial(const std::string& project_produc
     );
 
     if (!r.ok() || r.rows() == 0)
-        throw std::runtime_error(std::string("ProjectProduct::addMaterial: ") + r.errMsg());
+        throw PgException(std::string("ProjectProduct::addMaterial: ") + r.errMsg(), r.pgCode());
     return rowToMaterial(r, 0);
 }
 

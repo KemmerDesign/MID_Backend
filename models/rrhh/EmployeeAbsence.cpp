@@ -81,7 +81,7 @@ EmployeeAbsence EmployeeAbsence::create(const std::string& employee_id,
          created_by}
     );
     if (!r.ok() || r.rows() == 0)
-        throw std::runtime_error(std::string("EmployeeAbsence::create: ") + r.errMsg());
+        throw PgException(std::string("EmployeeAbsence::create: ") + r.errMsg(), r.pgCode());
     return rowToAbsence(r, 0);
 }
 

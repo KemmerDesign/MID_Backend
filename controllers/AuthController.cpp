@@ -24,6 +24,13 @@ static HttpResponsePtr jsonResp(HttpStatusCode code, const json& body) {
     return resp;
 }
 
+static json pgErrBody(const std::exception& e, const std::string& msg = "Error interno del servidor") {
+    json body = {{"error", msg}};
+    if (const auto* pe = dynamic_cast<const PgException*>(&e))
+        if (!pe->sqlstate.empty()) body["pg_code"] = pe->sqlstate;
+    return body;
+}
+
 void AuthController::login(const HttpRequestPtr& req,
                            std::function<void(const HttpResponsePtr&)>&& callback) {
     // 1. Parsear body
@@ -54,7 +61,7 @@ void AuthController::login(const HttpRequestPtr& req,
         maybeUser = User::findByEmail(email);
     } catch (const std::exception& e) {
         LOG_ERROR << "[AuthController] Error DB buscando usuario: " << e.what();
-        callback(jsonResp(k500InternalServerError, {{"error", "Error interno del servidor"}}));
+        callback(jsonResp(k500InternalServerError, pgErrBody(e)));
         return;
     }
 
@@ -87,7 +94,7 @@ void AuthController::login(const HttpRequestPtr& req,
             .sign(jwt::algorithm::hs256{jwtSecret()});
     } catch (const std::exception& e) {
         LOG_ERROR << "[AuthController] Error generando JWT: " << e.what();
-        callback(jsonResp(k500InternalServerError, {{"error", "Error interno del servidor"}}));
+        callback(jsonResp(k500InternalServerError, pgErrBody(e)));
         return;
     }
 
@@ -163,7 +170,7 @@ void AuthController::register_(const HttpRequestPtr& req,
         }
     } catch (const std::exception& e) {
         LOG_ERROR << "[AuthController] Error DB verificando email: " << e.what();
-        callback(jsonResp(k500InternalServerError, {{"error", "Error interno del servidor"}}));
+        callback(jsonResp(k500InternalServerError, pgErrBody(e)));
         return;
     }
 
@@ -174,7 +181,7 @@ void AuthController::register_(const HttpRequestPtr& req,
         newUser = User::create(*tenant_id, *email, hash, *full_name, role);
     } catch (const std::exception& e) {
         LOG_ERROR << "[AuthController] Error creando usuario: " << e.what();
-        callback(jsonResp(k500InternalServerError, {{"error", "Error interno del servidor"}}));
+        callback(jsonResp(k500InternalServerError, pgErrBody(e)));
         return;
     }
 

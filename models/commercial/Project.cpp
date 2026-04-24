@@ -64,7 +64,7 @@ Project Project::create(const std::string& tenant_id,
     );
 
     if (!r.ok() || r.rows() == 0)
-        throw std::runtime_error(std::string("Project::create: ") + r.errMsg());
+        throw PgException(std::string("Project::create: ") + r.errMsg(), r.pgCode());
     return rowToProject(r, 0);
 }
 
@@ -109,4 +109,31 @@ void Project::submitForApproval(const std::string& project_id, const std::string
 
     PgConnection::getInstance().exec(
         "UPDATE public.projects SET estado='en_revision' WHERE id=$1", {project_id});
+}
+
+std::optional<Project> Project::update(const std::string& id, const std::string& tenant_id, const json& data) {
+    auto str = [&](const char* key, const char* def = "") -> std::string {
+        if (data.contains(key) && data[key].is_string()) return data[key].get<std::string>();
+        return def;
+    };
+    std::string presupuesto = "";
+    if (data.contains("presupuesto_cliente") && data["presupuesto_cliente"].is_number())
+        presupuesto = std::to_string(data["presupuesto_cliente"].get<double>());
+
+    auto r = PgConnection::getInstance().exec(
+        "UPDATE public.projects SET "
+        "  nombre      = COALESCE(NULLIF($3,''), nombre), "
+        "  descripcion = CASE WHEN $4 = '__unset__' THEN descripcion ELSE NULLIF($4,'') END, "
+        "  fecha_prometida = CASE WHEN $5 = '' THEN fecha_prometida ELSE $5::DATE END, "
+        "  presupuesto_cliente = CASE WHEN $6 = '' THEN presupuesto_cliente ELSE $6::NUMERIC END, "
+        "  notas = CASE WHEN $7 = '__unset__' THEN notas ELSE NULLIF($7,'') END "
+        "WHERE id=$1 AND tenant_id=$2 RETURNING *",
+        {id, tenant_id, str("nombre"), 
+         data.contains("descripcion") ? str("descripcion") : "__unset__",
+         str("fecha_prometida"), presupuesto,
+         data.contains("notas") ? str("notas") : "__unset__"}
+    );
+
+    if (!r.ok() || r.rows() == 0) return std::nullopt;
+    return rowToProject(r, 0);
 }

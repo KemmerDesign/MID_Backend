@@ -72,7 +72,7 @@ EmployeeEducation EmployeeEducation::create(const std::string& employee_id,
          str("ciudad"), str("notas")}
     );
     if (!r.ok() || r.rows() == 0)
-        throw std::runtime_error(std::string("EmployeeEducation::create: ") + r.errMsg());
+        throw PgException(std::string("EmployeeEducation::create: ") + r.errMsg(), r.pgCode());
     return rowToEducation(r, 0);
 }
 

@@ -55,7 +55,7 @@ EmployeeWorkHistory EmployeeWorkHistory::create(const std::string& employee_id,
          str("descripcion"), str("motivo_retiro")}
     );
     if (!r.ok() || r.rows() == 0)
-        throw std::runtime_error(std::string("EmployeeWorkHistory::create: ") + r.errMsg());
+        throw PgException(std::string("EmployeeWorkHistory::create: ") + r.errMsg(), r.pgCode());
     return rowToWorkHistory(r, 0);
 }
 

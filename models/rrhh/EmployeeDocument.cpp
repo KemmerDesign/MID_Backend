@@ -62,7 +62,7 @@ EmployeeDocument EmployeeDocument::create(const std::string& employee_id,
          str("notas")}
     );
     if (!r.ok() || r.rows() == 0)
-        throw std::runtime_error(std::string("EmployeeDocument::create: ") + r.errMsg());
+        throw PgException(std::string("EmployeeDocument::create: ") + r.errMsg(), r.pgCode());
     return rowToDocument(r, 0);
 }
 

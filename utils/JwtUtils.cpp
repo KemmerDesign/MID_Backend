@@ -1,13 +1,28 @@
 #include "JwtUtils.h"
 #include <jwt-cpp/traits/nlohmann-json/defaults.h>
 #include <nlohmann/json.hpp>
+#include <fmt/core.h>
 #include <cstdlib>
 
-static constexpr const char* DEFAULT_JWT_SECRET = "monarca_dev_secret_CHANGE_IN_PROD";
-
-static std::string jwtSecret() {
-    const char* s = std::getenv("MONARCA_JWT_SECRET");
-    return s ? s : DEFAULT_JWT_SECRET;
+// El secreto se resuelve UNA SOLA VEZ al primer uso (static local).
+// En dev: usa la env var o el fallback de desarrollo.
+// En producción: abort si la env var no está definida — nunca arrancar sin secreto real.
+static const std::string& jwtSecret() {
+    static const std::string secret = []() -> std::string {
+        const char* s = std::getenv("MONARCA_JWT_SECRET");
+#ifdef MONARCA_DEV
+        return s ? s : "monarca_dev_secret_CHANGE_IN_PROD";
+#else
+        if (!s) {
+            fmt::print(stderr,
+                "❌ [PROD] Variable de entorno 'MONARCA_JWT_SECRET' no definida. "
+                "El servidor no arranca sin un secreto JWT seguro.\n");
+            std::abort();
+        }
+        return s;
+#endif
+    }();
+    return secret;
 }
 
 namespace JwtUtils {

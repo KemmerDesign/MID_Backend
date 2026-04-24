@@ -128,3 +128,16 @@ void SupplierController::getOne(const HttpRequestPtr &req,
 
     callback(resp);
 }
+void SupplierController::listAll(const HttpRequestPtr &req,
+                                 std::function<void (const HttpResponsePtr &)> &&callback) {
+    auto list = Database::getInstance().list("suppliers", "");
+    nlohmann::json results = nlohmann::json::array();
+    for (const auto& item : list) {
+        results.push_back(item);
+    }
+    auto resp = HttpResponse::newHttpResponse();
+    resp->setStatusCode(k200OK);
+    resp->setBody(results.dump());
+    resp->setContentTypeCode(CT_APPLICATION_JSON);
+    callback(resp);
+}

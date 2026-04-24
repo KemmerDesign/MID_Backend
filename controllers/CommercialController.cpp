@@ -16,6 +16,13 @@ static HttpResponsePtr jsonResp(HttpStatusCode code, const json& body) {
     return resp;
 }
 
+static json pgErrBody(const std::exception& e, const std::string& msg = "Error interno del servidor") {
+    json body = {{"error", msg}};
+    if (const auto* pe = dynamic_cast<const PgException*>(&e))
+        if (!pe->sqlstate.empty()) body["pg_code"] = pe->sqlstate;
+    return body;
+}
+
 // ── POST /api/v1/commercial/clients ──────────────────────────────────────────
 void CommercialController::createClient(const HttpRequestPtr& req,
                                          std::function<void(const HttpResponsePtr&)>&& cb) {
@@ -39,9 +46,9 @@ void CommercialController::createClient(const HttpRequestPtr& req,
     } catch (const std::exception& e) {
         std::string msg = e.what();
         if (msg.find("clients_nit_tenant") != std::string::npos)
-            cb(jsonResp(k409Conflict, {{"error","Ya existe un cliente con ese NIT"}}));
+            cb(jsonResp(k409Conflict, pgErrBody(e, "Ya existe un cliente con ese NIT")));
         else
-            cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
+            cb(jsonResp(k500InternalServerError, pgErrBody(e)));
     }
 }
 
@@ -56,8 +63,8 @@ void CommercialController::listClients(const HttpRequestPtr& req,
         json arr = json::array();
         for (const auto& c : clients) arr.push_back(c.toJson());
         cb(jsonResp(k200OK, {{"clients", arr}, {"total", arr.size()}}));
-    } catch (const std::exception&) {
-        cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
     }
 }
 
@@ -109,8 +116,8 @@ void CommercialController::getClient(const HttpRequestPtr& req,
         responseBody["addresses"] = addrArr;
         responseBody["contacts"]  = contactArr;
         cb(jsonResp(k200OK, {{"client", responseBody}}));
-    } catch (const std::exception&) {
-        cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
     }
 }
 
@@ -161,7 +168,7 @@ void CommercialController::createVisit(const HttpRequestPtr& req,
             {"created_at",   r.val(0,"created_at")}
         };
         cb(jsonResp(k201Created, {{"visit", visit}}));
-    } catch (const std::exception&) {
-        cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
     }
 }

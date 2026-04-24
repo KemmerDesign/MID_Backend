@@ -13,22 +13,32 @@ PgConnection::PgConnection() : conn_(nullptr, &PQfinish) {
 }
 
 std::string PgConnection::buildConnStr() {
-    // Si el usuario define MONARCA_PG_CONNSTR completo, lo usamos directamente.
-    if (const char* full = std::getenv("MONARCA_PG_CONNSTR")) {
-        return full;
-    }
+    if (const char* full = std::getenv("MONARCA_PG_CONNSTR")) return full;
 
-    auto env = [](const char* key, const char* def) -> std::string {
+    // En desarrollo: fallback a valores locales conocidos.
+    // En producción: abort si falta la variable — nunca arrancar sin credenciales reales.
+    auto reqEnv = [](const char* key, const char* devFallback) -> std::string {
+#ifdef MONARCA_DEV
         const char* v = std::getenv(key);
-        return v ? v : def;
+        return v ? v : devFallback;
+#else
+        const char* v = std::getenv(key);
+        if (!v) {
+            fmt::print(stderr,
+                "❌ [PROD] Variable de entorno '{}' no definida. "
+                "El servidor no arranca sin credenciales de base de datos.\n", key);
+            std::abort();
+        }
+        return v;
+#endif
     };
 
     return fmt::format("host={} port={} dbname={} user={} password={} connect_timeout=5",
-        env("MONARCA_PG_HOST",     "localhost"),
-        env("MONARCA_PG_PORT",     "5432"),
-        env("MONARCA_PG_DB",       "monarca_db"),
-        env("MONARCA_PG_USER",     "monarca"),
-        env("MONARCA_PG_PASSWORD", "monarca_dev_2024")
+        reqEnv("MONARCA_PG_HOST",     "localhost"),
+        reqEnv("MONARCA_PG_PORT",     "5432"),
+        reqEnv("MONARCA_PG_DB",       "monarca_db"),
+        reqEnv("MONARCA_PG_USER",     "monarca"),
+        reqEnv("MONARCA_PG_PASSWORD", "monarca_dev_2024")
     );
 }
 
@@ -50,6 +60,11 @@ bool PgConnection::isConnected() const {
 
 PgResult PgConnection::exec(const std::string& sql,
                              const std::vector<std::string>& params) {
+    // Un único mutex serializa TODAS las llamadas a libpq sobre esta conexión.
+    // libpq no es thread-safe en una sola PGconn; sin esto, dos handlers
+    // concurrentes de Drogon causarían corrupción o segfault.
+    std::lock_guard<std::mutex> lock(mtx_);
+
     if (!isConnected()) {
         PQreset(conn_.get());
         if (!isConnected())

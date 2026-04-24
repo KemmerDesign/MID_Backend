@@ -56,7 +56,7 @@ EmployeeDisciplinary EmployeeDisciplinary::create(const std::string& employee_id
          str("descripcion"), created_by}
     );
     if (!r.ok() || r.rows() == 0)
-        throw std::runtime_error(std::string("EmployeeDisciplinary::create: ") + r.errMsg());
+        throw PgException(std::string("EmployeeDisciplinary::create: ") + r.errMsg(), r.pgCode());
     return rowToDisciplinary(r, 0);
 }
 

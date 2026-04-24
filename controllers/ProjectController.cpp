@@ -16,6 +16,13 @@ static HttpResponsePtr jsonResp(HttpStatusCode code, const json& body) {
     return resp;
 }
 
+static json pgErrBody(const std::exception& e, const std::string& msg = "Error interno del servidor") {
+    json body = {{"error", msg}};
+    if (const auto* pe = dynamic_cast<const PgException*>(&e))
+        if (!pe->sqlstate.empty()) body["pg_code"] = pe->sqlstate;
+    return body;
+}
+
 static json approvalRowToJson(const PgResult& r, int i) {
     return {
         {"id",               r.val(i,"id")},
@@ -50,7 +57,7 @@ void ProjectController::createProject(const HttpRequestPtr& req,
         if (msg.find("violates foreign key") != std::string::npos)
             cb(jsonResp(k400BadRequest, {{"error","client_id inválido"}}));
         else
-            cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
+            cb(jsonResp(k500InternalServerError, pgErrBody(e)));
     }
 }
 
@@ -67,8 +74,8 @@ void ProjectController::listProjects(const HttpRequestPtr& req,
         json arr = json::array();
         for (const auto& p : projects) arr.push_back(p.toJson());
         cb(jsonResp(k200OK, {{"projects", arr}, {"total", arr.size()}}));
-    } catch (const std::exception&) {
-        cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
     }
 }
 
@@ -126,8 +133,8 @@ void ProjectController::getProject(const HttpRequestPtr& req,
         body["members"] = membersArr;
 
         cb(jsonResp(k200OK, {{"project", body}}));
-    } catch (const std::exception&) {
-        cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
     }
 }
 
@@ -148,7 +155,7 @@ void ProjectController::submitProject(const HttpRequestPtr& req,
         else if (msg.find("no encontrado") != std::string::npos)
             cb(jsonResp(k404NotFound, {{"error", msg}}));
         else
-            cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
+            cb(jsonResp(k500InternalServerError, pgErrBody(e)));
     }
 }
 
@@ -182,7 +189,7 @@ void ProjectController::addProduct(const HttpRequestPtr& req,
         else if (msg.find("violates check") != std::string::npos)
             cb(jsonResp(k400BadRequest, {{"error","Valor inválido en canal_venta o temporalidad"}}));
         else
-            cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
+            cb(jsonResp(k500InternalServerError, pgErrBody(e)));
     }
 }
 
@@ -198,8 +205,8 @@ void ProjectController::listProducts(const HttpRequestPtr& req,
         json arr = json::array();
         for (const auto& p : products) arr.push_back(p.toJson());
         cb(jsonResp(k200OK, {{"products", arr}, {"total", arr.size()}}));
-    } catch (const std::exception&) {
-        cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
     }
 }
 
@@ -216,8 +223,8 @@ void ProjectController::removeProduct(const HttpRequestPtr& req,
         bool ok = ProjectProduct::remove(product_id, claims->tenant_id);
         if (!ok) { cb(jsonResp(k404NotFound, {{"error","Producto no encontrado"}})); return; }
         cb(jsonResp(k200OK, {{"message","Producto eliminado del proyecto"}}));
-    } catch (const std::exception&) {
-        cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
     }
 }
 
@@ -247,7 +254,7 @@ void ProjectController::addMaterial(const HttpRequestPtr& req,
         else if (msg.find("violates foreign key") != std::string::npos)
             cb(jsonResp(k400BadRequest, {{"error","product_id inválido"}}));
         else
-            cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
+            cb(jsonResp(k500InternalServerError, pgErrBody(e)));
     }
 }
 
@@ -265,8 +272,8 @@ void ProjectController::removeMaterial(const HttpRequestPtr& req,
         bool ok = ProjectProduct::removeMaterial(material_id, product_id, claims->tenant_id);
         if (!ok) { cb(jsonResp(k404NotFound, {{"error","Material no encontrado"}})); return; }
         cb(jsonResp(k200OK, {{"message","Material eliminado"}}));
-    } catch (const std::exception&) {
-        cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
     }
 }
 
@@ -330,8 +337,8 @@ void ProjectController::resolveApproval(const HttpRequestPtr& req,
             }));
         }
 
-    } catch (const std::exception&) {
-        cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
     }
 }
 
@@ -381,7 +388,7 @@ void ProjectController::addMember(const HttpRequestPtr& req,
         if (msg.find("violates foreign key") != std::string::npos)
             cb(jsonResp(k400BadRequest, {{"error","employee_id o project_id inválido"}}));
         else
-            cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
+            cb(jsonResp(k500InternalServerError, pgErrBody(e)));
     }
 }
 
@@ -420,8 +427,8 @@ void ProjectController::listMembers(const HttpRequestPtr& req,
             });
         }
         cb(jsonResp(k200OK, {{"members", arr}, {"total", arr.size()}}));
-    } catch (const std::exception&) {
-        cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
     }
 }
 
@@ -443,7 +450,27 @@ void ProjectController::removeMember(const HttpRequestPtr& req,
             { cb(jsonResp(k404NotFound, {{"error","Miembro no encontrado"}})); return; }
 
         cb(jsonResp(k200OK, {{"message","Miembro removido del proyecto"}}));
-    } catch (const std::exception&) {
-        cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
+    }
+}
+
+// PATCH /api/v1/commercial/projects/{id}
+void ProjectController::updateProject(const HttpRequestPtr& req,
+                                       std::function<void(const HttpResponsePtr&)>&& cb,
+                                       std::string&& id) {
+    auto claims = JwtUtils::extractClaims(req);
+    if (!claims) { cb(JwtUtils::unauthorized()); return; }
+
+    json body;
+    try { body = json::parse(req->getBody()); }
+    catch (...) { cb(jsonResp(k400BadRequest, {{"error","JSON mal formado"}})); return; }
+
+    try {
+        auto project = Project::update(id, claims->tenant_id, body);
+        if (!project) { cb(jsonResp(k404NotFound, {{"error","Proyecto no encontrado"}})); return; }
+        cb(jsonResp(k200OK, {{"project", project->toJson()}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
     }
 }

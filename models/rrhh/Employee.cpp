@@ -104,7 +104,7 @@ Employee Employee::create(const std::string& tenant_id, const json& data) {
     );
 
     if (!r.ok() || r.rows() == 0)
-        throw std::runtime_error(std::string("Employee::create: ") + r.errMsg());
+        throw PgException(std::string("Employee::create: ") + r.errMsg(), r.pgCode());
     return rowToEmployee(r, 0);
 }
 

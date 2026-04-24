@@ -5,6 +5,11 @@
 #include "../models/rrhh/EmployeeAbsence.h"
 #include "../models/rrhh/EmployeeVacation.h"
 #include "../models/rrhh/EmployeeDisciplinary.h"
+#include "../models/rrhh/EmployeeEmergencyContact.h"
+#include "../models/rrhh/EmployeeDocument.h"
+#include "../models/rrhh/EmployeeTraining.h"
+#include "../models/rrhh/EmployeeEducation.h"
+#include "../models/rrhh/EmployeeWorkHistory.h"
 #include "../utils/JwtUtils.h"
 #include "../utils/PgConnection.h"
 #include <nlohmann/json.hpp>
@@ -18,6 +23,15 @@ static HttpResponsePtr jsonResp(HttpStatusCode code, const json& body) {
     resp->setContentTypeCode(CT_APPLICATION_JSON);
     resp->setBody(body.dump());
     return resp;
+}
+
+// Construye el body de error incluyendo pg_code si la excepción es un PgException.
+// Uso: cb(jsonResp(k409Conflict, pgErrBody(e, "Mensaje amigable")));
+static json pgErrBody(const std::exception& e, const std::string& msg = "Error interno del servidor") {
+    json body = {{"error", msg}};
+    if (const auto* pe = dynamic_cast<const PgException*>(&e))
+        if (!pe->sqlstate.empty()) body["pg_code"] = pe->sqlstate;
+    return body;
 }
 
 static const std::set<std::string> VALID_DEPTS = {
@@ -64,9 +78,9 @@ void EmployeeController::createEmployee(const HttpRequestPtr& req,
     } catch (const std::exception& e) {
         std::string msg = e.what();
         if (msg.find("employees_doc_tenant") != std::string::npos)
-            cb(jsonResp(k409Conflict, {{"error","Ya existe un empleado con ese documento"}}));
+            cb(jsonResp(k409Conflict, pgErrBody(e, "Ya existe un empleado con ese documento")));
         else
-            cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
+            cb(jsonResp(k500InternalServerError, pgErrBody(e)));
     }
 }
 
@@ -82,8 +96,8 @@ void EmployeeController::listEmployees(const HttpRequestPtr& req,
         json arr = json::array();
         for (const auto& e : employees) arr.push_back(e.toJson());
         cb(jsonResp(k200OK, {{"employees", arr}, {"total", arr.size()}}));
-    } catch (const std::exception&) {
-        cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
     }
 }
 
@@ -120,17 +134,38 @@ void EmployeeController::getEmployee(const HttpRequestPtr& req,
         json body = emp->toJson();
         body["proyectos_activos"] = projArr;
         cb(jsonResp(k200OK, {{"employee", body}}));
-    } catch (const std::exception&) {
-        cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
     }
 }
 
 // ─── Helpers de validación ────────────────────────────────────────────────────
 
+static const std::set<std::string> VALID_DOCUMENT_TIPOS = {
+    "cedula","contrato","hoja_vida","diploma","acta_grado","certificado_estudios",
+    "certificado_laboral","eps","arl","pension","caja_compensacion","libreta_militar",
+    "paz_salvo","acuerdo_confidencialidad","reglamento_interno","otro"
+};
+static const std::set<std::string> VALID_DOCUMENT_ESTADOS = {
+    "pendiente","recibido","vencido","no_aplica"
+};
+static const std::set<std::string> VALID_TRAINING_TIPOS = {
+    "induccion","seguridad_salud","tecnico","habilidades_blandas","certificacion","otro"
+};
+static const std::set<std::string> VALID_TRAINING_MODALIDADES = {
+    "presencial","virtual","mixta","e_learning"
+};
+static const std::set<std::string> VALID_EDUCATION_NIVELES = {
+    "bachillerato","tecnico","tecnologo","universitario","especializacion","maestria","doctorado","otro"
+};
+static const std::set<std::string> VALID_EMERGENCY_PARENTESCOS = {
+    "conyuge","companero_permanente","padre","madre","hijo","hija","hermano","hermana","otro"
+};
+
 static const std::set<std::string> VALID_ABSENCE_TIPOS = {
     "incapacidad_medica","accidente_trabajo","licencia_maternidad","licencia_paternidad",
     "licencia_luto","permiso_remunerado","permiso_no_remunerado",
-    "calamidad_domestica","suspension_disciplinaria","otro"
+    "calamidad_domestica","suspension_disciplinaria","inasistencia_injustificada","otro"
 };
 static const std::set<std::string> VALID_ABSENCE_ESTADOS = {
     "solicitado","aprobado","rechazado","en_curso","completado","cancelado"
@@ -184,7 +219,7 @@ void EmployeeController::applyPositionChange(const HttpRequestPtr& req,
         if (msg.find("no encontrado") != std::string::npos || msg.find("violates foreign key") != std::string::npos)
             cb(jsonResp(k404NotFound, {{"error","Empleado no encontrado"}}));
         else
-            cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
+            cb(jsonResp(k500InternalServerError, pgErrBody(e)));
     }
 }
 
@@ -200,8 +235,8 @@ void EmployeeController::listPositions(const HttpRequestPtr& req,
         json arr = json::array();
         for (const auto& p : positions) arr.push_back(p.toJson());
         cb(jsonResp(k200OK, {{"positions", arr}, {"total", arr.size()}}));
-    } catch (const std::exception&) {
-        cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
     }
 }
 
@@ -229,8 +264,8 @@ void EmployeeController::addDependent(const HttpRequestPtr& req,
     try {
         auto dep = EmployeeDependent::create(id, claims->tenant_id, body);
         cb(jsonResp(k201Created, {{"dependent", dep.toJson()}}));
-    } catch (const std::exception&) {
-        cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
     }
 }
 
@@ -247,8 +282,8 @@ void EmployeeController::listDependents(const HttpRequestPtr& req,
         json arr = json::array();
         for (const auto& d : deps) arr.push_back(d.toJson());
         cb(jsonResp(k200OK, {{"dependents", arr}, {"total", arr.size()}}));
-    } catch (const std::exception&) {
-        cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
     }
 }
 
@@ -263,8 +298,8 @@ void EmployeeController::removeDependent(const HttpRequestPtr& req,
         bool ok = EmployeeDependent::deactivate(dep_id, id, claims->tenant_id);
         if (!ok) { cb(jsonResp(k404NotFound, {{"error","Dependiente no encontrado"}})); return; }
         cb(jsonResp(k200OK, {{"message","Dependiente desvinculado"}}));
-    } catch (const std::exception&) {
-        cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
     }
 }
 
@@ -297,7 +332,7 @@ void EmployeeController::addAbsence(const HttpRequestPtr& req,
         if (msg.find("chk_absence_dates") != std::string::npos)
             cb(jsonResp(k400BadRequest, {{"error","fecha_fin debe ser mayor o igual a fecha_inicio"}}));
         else
-            cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
+            cb(jsonResp(k500InternalServerError, pgErrBody(e)));
     }
 }
 
@@ -313,8 +348,8 @@ void EmployeeController::listAbsences(const HttpRequestPtr& req,
         json arr = json::array();
         for (const auto& a : absences) arr.push_back(a.toJson());
         cb(jsonResp(k200OK, {{"absences", arr}, {"total", arr.size()}}));
-    } catch (const std::exception&) {
-        cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
     }
 }
 
@@ -338,8 +373,8 @@ void EmployeeController::updateAbsence(const HttpRequestPtr& req,
                                                  claims->user_id);
         if (!ab) { cb(jsonResp(k404NotFound, {{"error","Ausencia no encontrada"}})); return; }
         cb(jsonResp(k200OK, {{"absence", ab->toJson()}}));
-    } catch (const std::exception&) {
-        cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
     }
 }
 
@@ -367,8 +402,8 @@ void EmployeeController::ensureVacationPeriod(const HttpRequestPtr& req,
     try {
         auto vac = EmployeeVacation::ensurePeriod(id, claims->tenant_id, year, dias);
         cb(jsonResp(k200OK, {{"vacation_period", vac.toJson()}}));
-    } catch (const std::exception&) {
-        cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
     }
 }
 
@@ -384,8 +419,8 @@ void EmployeeController::listVacations(const HttpRequestPtr& req,
         json arr = json::array();
         for (const auto& v : vacs) arr.push_back(v.toJson());
         cb(jsonResp(k200OK, {{"vacations", arr}, {"total", arr.size()}}));
-    } catch (const std::exception&) {
-        cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
     }
 }
 
@@ -412,7 +447,7 @@ void EmployeeController::updateVacation(const HttpRequestPtr& req,
         if (msg.find("chk_vac_days") != std::string::npos)
             cb(jsonResp(k400BadRequest, {{"error","dias_tomados no puede superar dias_disponibles"}}));
         else
-            cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
+            cb(jsonResp(k500InternalServerError, pgErrBody(e)));
     }
 }
 
@@ -440,8 +475,8 @@ void EmployeeController::addDisciplinary(const HttpRequestPtr& req,
     try {
         auto disc = EmployeeDisciplinary::create(id, claims->tenant_id, claims->user_id, body);
         cb(jsonResp(k201Created, {{"disciplinary", disc.toJson()}}));
-    } catch (const std::exception&) {
-        cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
     }
 }
 
@@ -457,8 +492,8 @@ void EmployeeController::listDisciplinary(const HttpRequestPtr& req,
         json arr = json::array();
         for (const auto& d : records) arr.push_back(d.toJson());
         cb(jsonResp(k200OK, {{"disciplinary", arr}, {"total", arr.size()}}));
-    } catch (const std::exception&) {
-        cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
     }
 }
 
@@ -485,6 +520,384 @@ void EmployeeController::updateDisciplinary(const HttpRequestPtr& req,
         if (msg.find("chk_disc_firma") != std::string::npos)
             cb(jsonResp(k400BadRequest, {{"error","Si firmado_por_empleado=true, fecha_firma es requerida"}}));
         else
-            cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
+            cb(jsonResp(k500InternalServerError, pgErrBody(e)));
+    }
+}
+
+// ─── Contactos de emergencia ──────────────────────────────────────────────────
+
+// POST /api/v1/rrhh/employees/{id}/emergency-contacts
+void EmployeeController::addEmergencyContact(const HttpRequestPtr& req,
+                                              std::function<void(const HttpResponsePtr&)>&& cb,
+                                              std::string&& id) {
+    auto claims = JwtUtils::extractClaims(req);
+    if (!claims) { cb(JwtUtils::unauthorized()); return; }
+
+    json body;
+    try { body = json::parse(req->getBody()); }
+    catch (...) { cb(jsonResp(k400BadRequest, {{"error","JSON mal formado"}})); return; }
+
+    auto reqStr = [&](const char* f) {
+        return body.contains(f) && body[f].is_string() && !body[f].get<std::string>().empty();
+    };
+    if (!reqStr("nombres"))   { cb(jsonResp(k400BadRequest, {{"error","Campo requerido: nombres"}}));   return; }
+    if (!reqStr("apellidos")) { cb(jsonResp(k400BadRequest, {{"error","Campo requerido: apellidos"}})); return; }
+    if (!reqStr("telefono1")) { cb(jsonResp(k400BadRequest, {{"error","Campo requerido: telefono1"}})); return; }
+    if (!reqStr("parentesco") || !VALID_EMERGENCY_PARENTESCOS.count(body["parentesco"].get<std::string>()))
+        { cb(jsonResp(k400BadRequest, {{"error","parentesco inválido o ausente"}})); return; }
+
+    try {
+        auto c = EmployeeEmergencyContact::create(id, claims->tenant_id, body);
+        cb(jsonResp(k201Created, {{"emergency_contact", c.toJson()}}));
+    } catch (const std::exception& e) {
+        std::string msg = e.what();
+        if (msg.find("uq_emergency_principal") != std::string::npos)
+            cb(jsonResp(k409Conflict, pgErrBody(e, "Ya existe un contacto principal; desactívalo antes")));
+        else
+            cb(jsonResp(k500InternalServerError, pgErrBody(e)));
+    }
+}
+
+// GET /api/v1/rrhh/employees/{id}/emergency-contacts
+void EmployeeController::listEmergencyContacts(const HttpRequestPtr& req,
+                                                std::function<void(const HttpResponsePtr&)>&& cb,
+                                                std::string&& id) {
+    auto claims = JwtUtils::extractClaims(req);
+    if (!claims) { cb(JwtUtils::unauthorized()); return; }
+
+    try {
+        auto contacts = EmployeeEmergencyContact::findByEmployee(id, claims->tenant_id);
+        json arr = json::array();
+        for (const auto& c : contacts) arr.push_back(c.toJson());
+        cb(jsonResp(k200OK, {{"emergency_contacts", arr}, {"total", arr.size()}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
+    }
+}
+
+// DELETE /api/v1/rrhh/employees/{id}/emergency-contacts/{contact_id}
+void EmployeeController::removeEmergencyContact(const HttpRequestPtr& req,
+                                                 std::function<void(const HttpResponsePtr&)>&& cb,
+                                                 std::string&& id, std::string&& contact_id) {
+    auto claims = JwtUtils::extractClaims(req);
+    if (!claims) { cb(JwtUtils::unauthorized()); return; }
+
+    try {
+        bool ok = EmployeeEmergencyContact::remove(contact_id, id, claims->tenant_id);
+        if (!ok) { cb(jsonResp(k404NotFound, {{"error","Contacto no encontrado"}})); return; }
+        cb(jsonResp(k200OK, {{"message","Contacto de emergencia eliminado"}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
+    }
+}
+
+// ─── Documentos ───────────────────────────────────────────────────────────────
+
+// POST /api/v1/rrhh/employees/{id}/documents
+void EmployeeController::addDocument(const HttpRequestPtr& req,
+                                      std::function<void(const HttpResponsePtr&)>&& cb,
+                                      std::string&& id) {
+    auto claims = JwtUtils::extractClaims(req);
+    if (!claims) { cb(JwtUtils::unauthorized()); return; }
+
+    json body;
+    try { body = json::parse(req->getBody()); }
+    catch (...) { cb(jsonResp(k400BadRequest, {{"error","JSON mal formado"}})); return; }
+
+    auto reqStr = [&](const char* f) {
+        return body.contains(f) && body[f].is_string() && !body[f].get<std::string>().empty();
+    };
+    if (!reqStr("tipo") || !VALID_DOCUMENT_TIPOS.count(body["tipo"].get<std::string>()))
+        { cb(jsonResp(k400BadRequest, {{"error","tipo de documento inválido o ausente"}})); return; }
+    if (!reqStr("nombre")) { cb(jsonResp(k400BadRequest, {{"error","Campo requerido: nombre"}})); return; }
+
+    try {
+        auto doc = EmployeeDocument::create(id, claims->tenant_id, body);
+        cb(jsonResp(k201Created, {{"document", doc.toJson()}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
+    }
+}
+
+// GET /api/v1/rrhh/employees/{id}/documents
+void EmployeeController::listDocuments(const HttpRequestPtr& req,
+                                        std::function<void(const HttpResponsePtr&)>&& cb,
+                                        std::string&& id) {
+    auto claims = JwtUtils::extractClaims(req);
+    if (!claims) { cb(JwtUtils::unauthorized()); return; }
+
+    try {
+        auto docs = EmployeeDocument::findByEmployee(id, claims->tenant_id);
+        json arr = json::array();
+        for (const auto& d : docs) arr.push_back(d.toJson());
+        cb(jsonResp(k200OK, {{"documents", arr}, {"total", arr.size()}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
+    }
+}
+
+// PATCH /api/v1/rrhh/employees/{id}/documents/{doc_id}
+void EmployeeController::updateDocument(const HttpRequestPtr& req,
+                                         std::function<void(const HttpResponsePtr&)>&& cb,
+                                         std::string&& id, std::string&& doc_id) {
+    auto claims = JwtUtils::extractClaims(req);
+    if (!claims) { cb(JwtUtils::unauthorized()); return; }
+
+    json body;
+    try { body = json::parse(req->getBody()); }
+    catch (...) { cb(jsonResp(k400BadRequest, {{"error","JSON mal formado"}})); return; }
+
+    if (body.contains("estado") && !VALID_DOCUMENT_ESTADOS.count(body["estado"].get<std::string>()))
+        { cb(jsonResp(k400BadRequest, {{"error","estado inválido"}})); return; }
+
+    try {
+        auto doc = EmployeeDocument::updateStatus(doc_id, id, claims->tenant_id, body);
+        if (!doc) { cb(jsonResp(k404NotFound, {{"error","Documento no encontrado"}})); return; }
+        cb(jsonResp(k200OK, {{"document", doc->toJson()}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
+    }
+}
+
+// DELETE /api/v1/rrhh/employees/{id}/documents/{doc_id}
+void EmployeeController::removeDocument(const HttpRequestPtr& req,
+                                         std::function<void(const HttpResponsePtr&)>&& cb,
+                                         std::string&& id, std::string&& doc_id) {
+    auto claims = JwtUtils::extractClaims(req);
+    if (!claims) { cb(JwtUtils::unauthorized()); return; }
+
+    try {
+        bool ok = EmployeeDocument::remove(doc_id, id, claims->tenant_id);
+        if (!ok) { cb(jsonResp(k404NotFound, {{"error","Documento no encontrado"}})); return; }
+        cb(jsonResp(k200OK, {{"message","Documento eliminado"}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
+    }
+}
+
+// ─── Capacitaciones ───────────────────────────────────────────────────────────
+
+// POST /api/v1/rrhh/employees/{id}/training
+void EmployeeController::addTraining(const HttpRequestPtr& req,
+                                      std::function<void(const HttpResponsePtr&)>&& cb,
+                                      std::string&& id) {
+    auto claims = JwtUtils::extractClaims(req);
+    if (!claims) { cb(JwtUtils::unauthorized()); return; }
+
+    json body;
+    try { body = json::parse(req->getBody()); }
+    catch (...) { cb(jsonResp(k400BadRequest, {{"error","JSON mal formado"}})); return; }
+
+    auto reqStr = [&](const char* f) {
+        return body.contains(f) && body[f].is_string() && !body[f].get<std::string>().empty();
+    };
+    if (!reqStr("nombre_curso")) { cb(jsonResp(k400BadRequest, {{"error","Campo requerido: nombre_curso"}})); return; }
+    if (!reqStr("tipo") || !VALID_TRAINING_TIPOS.count(body["tipo"].get<std::string>()))
+        { cb(jsonResp(k400BadRequest, {{"error","tipo inválido o ausente"}})); return; }
+    if (reqStr("modalidad") && !VALID_TRAINING_MODALIDADES.count(body["modalidad"].get<std::string>()))
+        { cb(jsonResp(k400BadRequest, {{"error","modalidad inválida"}})); return; }
+
+    try {
+        auto t = EmployeeTraining::create(id, claims->tenant_id, body);
+        cb(jsonResp(k201Created, {{"training", t.toJson()}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
+    }
+}
+
+// GET /api/v1/rrhh/employees/{id}/training
+void EmployeeController::listTraining(const HttpRequestPtr& req,
+                                       std::function<void(const HttpResponsePtr&)>&& cb,
+                                       std::string&& id) {
+    auto claims = JwtUtils::extractClaims(req);
+    if (!claims) { cb(JwtUtils::unauthorized()); return; }
+
+    try {
+        auto items = EmployeeTraining::findByEmployee(id, claims->tenant_id);
+        json arr = json::array();
+        for (const auto& t : items) arr.push_back(t.toJson());
+        cb(jsonResp(k200OK, {{"training", arr}, {"total", arr.size()}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
+    }
+}
+
+// PATCH /api/v1/rrhh/employees/{id}/training/{training_id}
+void EmployeeController::updateTraining(const HttpRequestPtr& req,
+                                         std::function<void(const HttpResponsePtr&)>&& cb,
+                                         std::string&& id, std::string&& training_id) {
+    auto claims = JwtUtils::extractClaims(req);
+    if (!claims) { cb(JwtUtils::unauthorized()); return; }
+
+    json body;
+    try { body = json::parse(req->getBody()); }
+    catch (...) { cb(jsonResp(k400BadRequest, {{"error","JSON mal formado"}})); return; }
+
+    if (body.contains("tipo") && !VALID_TRAINING_TIPOS.count(body["tipo"].get<std::string>()))
+        { cb(jsonResp(k400BadRequest, {{"error","tipo inválido"}})); return; }
+    if (body.contains("modalidad") && !VALID_TRAINING_MODALIDADES.count(body["modalidad"].get<std::string>()))
+        { cb(jsonResp(k400BadRequest, {{"error","modalidad inválida"}})); return; }
+
+    try {
+        auto t = EmployeeTraining::update(training_id, id, claims->tenant_id, body);
+        if (!t) { cb(jsonResp(k404NotFound, {{"error","Capacitación no encontrada"}})); return; }
+        cb(jsonResp(k200OK, {{"training", t->toJson()}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
+    }
+}
+
+// DELETE /api/v1/rrhh/employees/{id}/training/{training_id}
+void EmployeeController::removeTraining(const HttpRequestPtr& req,
+                                         std::function<void(const HttpResponsePtr&)>&& cb,
+                                         std::string&& id, std::string&& training_id) {
+    auto claims = JwtUtils::extractClaims(req);
+    if (!claims) { cb(JwtUtils::unauthorized()); return; }
+
+    try {
+        bool ok = EmployeeTraining::remove(training_id, id, claims->tenant_id);
+        if (!ok) { cb(jsonResp(k404NotFound, {{"error","Capacitación no encontrada"}})); return; }
+        cb(jsonResp(k200OK, {{"message","Capacitación eliminada"}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
+    }
+}
+
+// ─── Educación ────────────────────────────────────────────────────────────────
+
+// POST /api/v1/rrhh/employees/{id}/education
+void EmployeeController::addEducation(const HttpRequestPtr& req,
+                                       std::function<void(const HttpResponsePtr&)>&& cb,
+                                       std::string&& id) {
+    auto claims = JwtUtils::extractClaims(req);
+    if (!claims) { cb(JwtUtils::unauthorized()); return; }
+
+    json body;
+    try { body = json::parse(req->getBody()); }
+    catch (...) { cb(jsonResp(k400BadRequest, {{"error","JSON mal formado"}})); return; }
+
+    auto reqStr = [&](const char* f) {
+        return body.contains(f) && body[f].is_string() && !body[f].get<std::string>().empty();
+    };
+    if (!reqStr("nivel") || !VALID_EDUCATION_NIVELES.count(body["nivel"].get<std::string>()))
+        { cb(jsonResp(k400BadRequest, {{"error","nivel educativo inválido o ausente"}})); return; }
+    if (!reqStr("titulo"))      { cb(jsonResp(k400BadRequest, {{"error","Campo requerido: titulo"}}));      return; }
+    if (!reqStr("institucion")) { cb(jsonResp(k400BadRequest, {{"error","Campo requerido: institucion"}})); return; }
+
+    try {
+        auto edu = EmployeeEducation::create(id, claims->tenant_id, body);
+        cb(jsonResp(k201Created, {{"education", edu.toJson()}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
+    }
+}
+
+// GET /api/v1/rrhh/employees/{id}/education
+void EmployeeController::listEducation(const HttpRequestPtr& req,
+                                        std::function<void(const HttpResponsePtr&)>&& cb,
+                                        std::string&& id) {
+    auto claims = JwtUtils::extractClaims(req);
+    if (!claims) { cb(JwtUtils::unauthorized()); return; }
+
+    try {
+        auto items = EmployeeEducation::findByEmployee(id, claims->tenant_id);
+        json arr = json::array();
+        for (const auto& e : items) arr.push_back(e.toJson());
+        cb(jsonResp(k200OK, {{"education", arr}, {"total", arr.size()}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
+    }
+}
+
+// DELETE /api/v1/rrhh/employees/{id}/education/{edu_id}
+void EmployeeController::removeEducation(const HttpRequestPtr& req,
+                                          std::function<void(const HttpResponsePtr&)>&& cb,
+                                          std::string&& id, std::string&& edu_id) {
+    auto claims = JwtUtils::extractClaims(req);
+    if (!claims) { cb(JwtUtils::unauthorized()); return; }
+
+    try {
+        bool ok = EmployeeEducation::remove(edu_id, id, claims->tenant_id);
+        if (!ok) { cb(jsonResp(k404NotFound, {{"error","Registro educativo no encontrado"}})); return; }
+        cb(jsonResp(k200OK, {{"message","Registro educativo eliminado"}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
+    }
+}
+
+// ─── Experiencia laboral previa ───────────────────────────────────────────────
+
+// POST /api/v1/rrhh/employees/{id}/work-history
+void EmployeeController::addWorkHistory(const HttpRequestPtr& req,
+                                         std::function<void(const HttpResponsePtr&)>&& cb,
+                                         std::string&& id) {
+    auto claims = JwtUtils::extractClaims(req);
+    if (!claims) { cb(JwtUtils::unauthorized()); return; }
+
+    json body;
+    try { body = json::parse(req->getBody()); }
+    catch (...) { cb(jsonResp(k400BadRequest, {{"error","JSON mal formado"}})); return; }
+
+    auto reqStr = [&](const char* f) {
+        return body.contains(f) && body[f].is_string() && !body[f].get<std::string>().empty();
+    };
+    if (!reqStr("empresa"))      { cb(jsonResp(k400BadRequest, {{"error","Campo requerido: empresa"}}));      return; }
+    if (!reqStr("cargo"))        { cb(jsonResp(k400BadRequest, {{"error","Campo requerido: cargo"}}));        return; }
+    if (!reqStr("fecha_inicio")) { cb(jsonResp(k400BadRequest, {{"error","Campo requerido: fecha_inicio"}})); return; }
+
+    try {
+        auto wh = EmployeeWorkHistory::create(id, claims->tenant_id, body);
+        cb(jsonResp(k201Created, {{"work_history", wh.toJson()}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
+    }
+}
+
+// GET /api/v1/rrhh/employees/{id}/work-history
+void EmployeeController::listWorkHistory(const HttpRequestPtr& req,
+                                          std::function<void(const HttpResponsePtr&)>&& cb,
+                                          std::string&& id) {
+    auto claims = JwtUtils::extractClaims(req);
+    if (!claims) { cb(JwtUtils::unauthorized()); return; }
+
+    try {
+        auto items = EmployeeWorkHistory::findByEmployee(id, claims->tenant_id);
+        json arr = json::array();
+        for (const auto& w : items) arr.push_back(w.toJson());
+        cb(jsonResp(k200OK, {{"work_history", arr}, {"total", arr.size()}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
+    }
+}
+
+// DELETE /api/v1/rrhh/employees/{id}/work-history/{history_id}
+void EmployeeController::removeWorkHistory(const HttpRequestPtr& req,
+                                            std::function<void(const HttpResponsePtr&)>&& cb,
+                                            std::string&& id, std::string&& history_id) {
+    auto claims = JwtUtils::extractClaims(req);
+    if (!claims) { cb(JwtUtils::unauthorized()); return; }
+
+    try {
+        bool ok = EmployeeWorkHistory::remove(history_id, id, claims->tenant_id);
+        if (!ok) { cb(jsonResp(k404NotFound, {{"error","Experiencia laboral no encontrada"}})); return; }
+        cb(jsonResp(k200OK, {{"message","Experiencia laboral eliminada"}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
+    }
+}
+
+// DELETE /api/v1/rrhh/employees/{id}/vacations/{vac_id}
+void EmployeeController::removeVacation(const HttpRequestPtr& req,
+                                         std::function<void(const HttpResponsePtr&)>&& cb,
+                                         std::string&& id, std::string&& vac_id) {
+    auto claims = JwtUtils::extractClaims(req);
+    if (!claims) { cb(JwtUtils::unauthorized()); return; }
+
+    try {
+        bool ok = EmployeeVacation::remove(vac_id, id, claims->tenant_id);
+        if (!ok) { cb(jsonResp(k404NotFound, {{"error","Registro de vacaciones no encontrado"}})); return; }
+        cb(jsonResp(k200OK, {{"message","Registro de vacaciones eliminado"}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
     }
 }

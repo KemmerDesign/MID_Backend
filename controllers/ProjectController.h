@@ -19,11 +19,13 @@ public:
     ADD_METHOD_TO(ProjectController::removeProduct,   "/api/v1/commercial/projects/{1}/products/{2}",                    Delete);
     ADD_METHOD_TO(ProjectController::addMaterial,     "/api/v1/commercial/projects/{1}/products/{2}/materials",          Post);
     ADD_METHOD_TO(ProjectController::removeMaterial,  "/api/v1/commercial/projects/{1}/products/{2}/materials/{3}",      Delete);
+    ADD_METHOD_TO(ProjectController::updateProject,   "/api/v1/commercial/projects/{1}",                                 Patch);
     METHOD_LIST_END
 
     void createProject  (const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& cb);
     void listProjects   (const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& cb);
     void getProject     (const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& cb, std::string&& id);
+    void updateProject  (const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& cb, std::string&& id);
     void submitProject  (const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& cb, std::string&& id);
     void resolveApproval(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& cb, std::string&& project_id, std::string&& dept);
     void addMember      (const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& cb, std::string&& project_id);

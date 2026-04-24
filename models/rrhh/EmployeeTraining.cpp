@@ -72,7 +72,7 @@ EmployeeTraining EmployeeTraining::create(const std::string& employee_id,
          str("resultado"), str("fecha_vencimiento"), str("certificado_url"), str("notas")}
     );
     if (!r.ok() || r.rows() == 0)
-        throw std::runtime_error(std::string("EmployeeTraining::create: ") + r.errMsg());
+        throw PgException(std::string("EmployeeTraining::create: ") + r.errMsg(), r.pgCode());
     return rowToTraining(r, 0);
 }
 

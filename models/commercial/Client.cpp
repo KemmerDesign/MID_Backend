@@ -67,7 +67,7 @@ Client Client::create(const std::string& tenant_id, const json& data) {
     );
 
     if (!result.ok() || result.rows() == 0)
-        throw std::runtime_error(std::string("Client::create: ") + result.errMsg());
+        throw PgException(std::string("Client::create: ") + result.errMsg(), result.pgCode());
     return rowToClient(result, 0);
 }
 

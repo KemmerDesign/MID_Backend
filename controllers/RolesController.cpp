@@ -14,6 +14,13 @@ static HttpResponsePtr jsonResp(HttpStatusCode code, const json& body) {
     return resp;
 }
 
+static json pgErrBody(const std::exception& e, const std::string& msg = "Error interno del servidor") {
+    json body = {{"error", msg}};
+    if (const auto* pe = dynamic_cast<const PgException*>(&e))
+        if (!pe->sqlstate.empty()) body["pg_code"] = pe->sqlstate;
+    return body;
+}
+
 static const std::set<std::string> VALID_DEPTS_ROLES = {
     "comercial","proyectos","produccion","almacen",
     "rrhh","gerencia","administrativo","financiero","tecnologia","otro"
@@ -31,8 +38,8 @@ void RolesController::listRoles(const HttpRequestPtr& req,
         json arr = json::array();
         for (const auto& ro : roles) arr.push_back(ro.toJson());
         cb(jsonResp(k200OK, {{"roles", arr}, {"total", arr.size()}}));
-    } catch (const std::exception&) {
-        cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
     }
 }
 
@@ -57,9 +64,9 @@ void RolesController::createRole(const HttpRequestPtr& req,
     } catch (const std::exception& e) {
         std::string msg = e.what();
         if (msg.find("uq_roles_nombre") != std::string::npos)
-            cb(jsonResp(k409Conflict, {{"error","Ya existe un rol con ese nombre en ese departamento"}}));
+            cb(jsonResp(k409Conflict, pgErrBody(e, "Ya existe un rol con ese nombre en ese departamento")));
         else
-            cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
+            cb(jsonResp(k500InternalServerError, pgErrBody(e)));
     }
 }
 
@@ -74,8 +81,8 @@ void RolesController::getRole(const HttpRequestPtr& req,
         auto ro = Role::findById(id, claims->tenant_id);
         if (!ro) { cb(jsonResp(k404NotFound, {{"error","Rol no encontrado"}})); return; }
         cb(jsonResp(k200OK, {{"role", ro->toJson()}}));
-    } catch (const std::exception&) {
-        cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
     }
 }
 
@@ -94,7 +101,7 @@ void RolesController::updateRole(const HttpRequestPtr& req,
         auto ro = Role::update(id, claims->tenant_id, body);
         if (!ro) { cb(jsonResp(k404NotFound, {{"error","Rol no encontrado"}})); return; }
         cb(jsonResp(k200OK, {{"role", ro->toJson()}}));
-    } catch (const std::exception&) {
-        cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
     }
 }

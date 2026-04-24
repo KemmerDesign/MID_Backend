@@ -2,12 +2,22 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <stdexcept>
 #include <libpq-fe.h>
 #include <nlohmann/json.hpp>
 
 using json = nlohmann::json;
+
+// Excepción que transporta el SQLSTATE de PostgreSQL (5 chars, ej. "23505").
+// Permite a los controladores mapear errores de DB a códigos HTTP precisos
+// sin exponer nombres de tablas ni columnas al cliente.
+struct PgException : std::runtime_error {
+    std::string sqlstate;
+    PgException(const std::string& msg, const std::string& state)
+        : std::runtime_error(msg), sqlstate(state) {}
+};
 
 // Wrapper RAII para un resultado de consulta PostgreSQL.
 // unique_ptr con el deleter de libpq garantiza que PQclear se llame
@@ -42,6 +52,14 @@ struct PgResult {
     const char* errMsg() const {
         return res ? PQresultErrorMessage(res.get()) : "sin resultado";
     }
+
+    // SQLSTATE de 5 caracteres (ej. "23505" = unique_violation).
+    // Vacío si no hay resultado o si no hubo error.
+    std::string pgCode() const {
+        if (!res) return "";
+        const char* s = PQresultErrorField(res.get(), PG_DIAG_SQLSTATE);
+        return s ? s : "";
+    }
 };
 
 // Singleton de conexión a PostgreSQL (libpq).
@@ -62,6 +80,9 @@ public:
 
 private:
     std::unique_ptr<PGconn, decltype(&PQfinish)> conn_;
+    // Serializa acceso desde los hilos del thread-pool de Drogon.
+    // libpq no es thread-safe sobre una misma conexión sin serialización.
+    mutable std::mutex mtx_;
 
     PgConnection();
     ~PgConnection() = default;

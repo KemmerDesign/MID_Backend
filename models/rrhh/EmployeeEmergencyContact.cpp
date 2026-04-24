@@ -59,7 +59,7 @@ EmployeeEmergencyContact EmployeeEmergencyContact::create(const std::string& emp
          principal ? "true" : "false"}
     );
     if (!r.ok() || r.rows() == 0)
-        throw std::runtime_error(std::string("EmployeeEmergencyContact::create: ") + r.errMsg());
+        throw PgException(std::string("EmployeeEmergencyContact::create: ") + r.errMsg(), r.pgCode());
     return rowToContact(r, 0);
 }
 

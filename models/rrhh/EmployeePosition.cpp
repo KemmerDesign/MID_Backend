@@ -81,7 +81,7 @@ EmployeePosition EmployeePosition::applyChange(const std::string& employee_id,
          es_honorarios ? "true" : "false"}
     );
     if (!r.ok() || r.rows() == 0)
-        throw std::runtime_error(std::string("EmployeePosition::applyChange: ") + r.errMsg());
+        throw PgException(std::string("EmployeePosition::applyChange: ") + r.errMsg(), r.pgCode());
 
     auto pos = rowToPosition(r, 0);
 

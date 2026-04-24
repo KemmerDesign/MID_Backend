@@ -60,7 +60,7 @@ EmployeeVacation EmployeeVacation::ensurePeriod(const std::string& employee_id,
         {employee_id, tenant_id, std::to_string(year), std::to_string(dias_disponibles)}
     );
     if (!r.ok() || r.rows() == 0)
-        throw std::runtime_error(std::string("EmployeeVacation::ensurePeriod: ") + r.errMsg());
+        throw PgException(std::string("EmployeeVacation::ensurePeriod: ") + r.errMsg(), r.pgCode());
     return rowToVacation(r, 0);
 }
 
@@ -103,4 +103,12 @@ std::optional<EmployeeVacation> EmployeeVacation::update(const std::string& id,
     );
     if (!r.ok() || r.rows() == 0) return std::nullopt;
     return rowToVacation(r, 0);
+}
+
+bool EmployeeVacation::remove(const std::string& id, const std::string& employee_id, const std::string& tenant_id) {
+    auto r = PgConnection::getInstance().exec(
+        "DELETE FROM public.employee_vacations "
+        "WHERE id=$1 AND employee_id=$2 AND tenant_id=$3",
+        {id, employee_id, tenant_id});
+    return r.ok();
 }

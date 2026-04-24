@@ -13,6 +13,13 @@ static HttpResponsePtr jsonResp(HttpStatusCode code, const json& body) {
     return resp;
 }
 
+static json pgErrBody(const std::exception& e, const std::string& msg = "Error interno del servidor") {
+    json body = {{"error", msg}};
+    if (const auto* pe = dynamic_cast<const PgException*>(&e))
+        if (!pe->sqlstate.empty()) body["pg_code"] = pe->sqlstate;
+    return body;
+}
+
 // ── GET /api/v1/commercial/product-catalog ────────────────────────────────────
 void ProductCatalogController::listCatalog(const HttpRequestPtr& req,
                                             std::function<void(const HttpResponsePtr&)>&& cb) {
@@ -26,8 +33,8 @@ void ProductCatalogController::listCatalog(const HttpRequestPtr& req,
         json arr = json::array();
         for (const auto& item : items) arr.push_back(item.toJson());
         cb(jsonResp(k200OK, {{"catalog", arr}, {"total", arr.size()}}));
-    } catch (const std::exception&) {
-        cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
     }
 }
 
@@ -52,9 +59,9 @@ void ProductCatalogController::createCatalog(const HttpRequestPtr& req,
     } catch (const std::exception& e) {
         std::string msg = e.what();
         if (msg.find("uq_product_catalog") != std::string::npos)
-            cb(jsonResp(k409Conflict, {{"error","Ya existe un producto con ese nombre en el catálogo"}}));
+            cb(jsonResp(k409Conflict, pgErrBody(e, "Ya existe un producto con ese nombre en el catálogo")));
         else
-            cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
+            cb(jsonResp(k500InternalServerError, pgErrBody(e)));
     }
 }
 
@@ -69,8 +76,8 @@ void ProductCatalogController::getCatalog(const HttpRequestPtr& req,
         auto item = ProductCatalog::findById(id, claims->tenant_id);
         if (!item) { cb(jsonResp(k404NotFound, {{"error","Producto no encontrado"}})); return; }
         cb(jsonResp(k200OK, {{"catalog_item", item->toJson()}}));
-    } catch (const std::exception&) {
-        cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
     }
 }
 
@@ -89,7 +96,7 @@ void ProductCatalogController::updateCatalog(const HttpRequestPtr& req,
         auto item = ProductCatalog::update(id, claims->tenant_id, body);
         if (!item) { cb(jsonResp(k404NotFound, {{"error","Producto no encontrado"}})); return; }
         cb(jsonResp(k200OK, {{"catalog_item", item->toJson()}}));
-    } catch (const std::exception&) {
-        cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
+    } catch (const std::exception& e) {
+        cb(jsonResp(k500InternalServerError, pgErrBody(e)));
     }
 }

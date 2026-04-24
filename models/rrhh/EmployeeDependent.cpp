@@ -58,7 +58,7 @@ EmployeeDependent EmployeeDependent::create(const std::string& employee_id,
          str("parentesco"), vive ? "true" : "false", str("notas")}
     );
     if (!r.ok() || r.rows() == 0)
-        throw std::runtime_error(std::string("EmployeeDependent::create: ") + r.errMsg());
+        throw PgException(std::string("EmployeeDependent::create: ") + r.errMsg(), r.pgCode());
     return rowToDependent(r, 0);
 }
 

@@ -39,7 +39,7 @@ ProductCatalog ProductCatalog::create(const std::string& tenant_id, const json& 
     );
 
     if (!r.ok() || r.rows() == 0)
-        throw std::runtime_error(std::string("ProductCatalog::create: ") + r.errMsg());
+        throw PgException(std::string("ProductCatalog::create: ") + r.errMsg(), r.pgCode());
     return rowToCatalog(r, 0);
 }
 

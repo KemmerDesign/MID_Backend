@@ -81,6 +81,16 @@ add_executable(MiBackendMonarca
     models/rrhh/EmployeeVacation.cpp
     models/rrhh/EmployeeDisciplinary.h
     models/rrhh/EmployeeDisciplinary.cpp
+    models/rrhh/EmployeeEmergencyContact.h
+    models/rrhh/EmployeeEmergencyContact.cpp
+    models/rrhh/EmployeeDocument.h
+    models/rrhh/EmployeeDocument.cpp
+    models/rrhh/EmployeeTraining.h
+    models/rrhh/EmployeeTraining.cpp
+    models/rrhh/EmployeeEducation.h
+    models/rrhh/EmployeeEducation.cpp
+    models/rrhh/EmployeeWorkHistory.h
+    models/rrhh/EmployeeWorkHistory.cpp
     models/rawMaterial/MetalMaterial.h
     models/rawMaterial/MetalMaterial.cc
     utils/Database.h

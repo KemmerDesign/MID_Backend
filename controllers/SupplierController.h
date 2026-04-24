@@ -9,10 +9,10 @@ public:
     // Registramos la ruta: POST /api/suppliers
     ADD_METHOD_TO(SupplierController::createOne, "/api/suppliers", Post);
     ADD_METHOD_TO(SupplierController::getOne, "/api/suppliers/{1}", Get);
+    ADD_METHOD_TO(SupplierController::listAll, "/api/suppliers", Get);
     METHOD_LIST_END
 
     void createOne(const HttpRequestPtr &req, std::function<void (const HttpResponsePtr &)> &&callback);
-    
-    // Otros métodos...
     void getOne(const HttpRequestPtr &req, std::function<void (const HttpResponsePtr &)> &&callback, std::string &&id);
-};
+    void listAll(const HttpRequestPtr &req, std::function<void (const HttpResponsePtr &)> &&callback);
+    };

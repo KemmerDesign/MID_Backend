@@ -1,104 +1,108 @@
 #include "Database.h"
 #include <fmt/core.h>
 
-// ─── Por qué "monarca.db"? ────────────────────────────────────────────────────
-// SQLite guarda TODO en un solo archivo. Sin servidor, sin credenciales,
-// sin internet. El archivo se crea solo si no existe.
-// ─────────────────────────────────────────────────────────────────────────────
 static constexpr const char* DB_FILE = "monarca.db";
 
-// ─── El Singleton ─────────────────────────────────────────────────────────────
-// La variable 'instance' es static LOCAL — se construye la primera vez que
-// alguien llama getInstance() y vive hasta que el programa termina.
-// Desde C++11 esto es thread-safe garantizado por el estándar.
-// ─────────────────────────────────────────────────────────────────────────────
 Database& Database::getInstance() {
     static Database instance;
     return instance;
 }
 
-// ─── Constructor: aquí abre el archivo SQLite (RAII) ─────────────────────────
-// SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE:
-//   - Si el archivo existe → lo abre
-//   - Si no existe → lo crea
-// Si falla (disco lleno, permisos), SQLiteCpp lanza una excepción aquí,
-// antes de que la app haga cualquier cosa. Fallo rápido y claro.
-// ─────────────────────────────────────────────────────────────────────────────
 Database::Database()
     : db_(DB_FILE, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE)
 {
-    fmt::print("📂 Base de datos abierta: {}\n", DB_FILE);
+    fmt::print("📂 Base de datos SQLite abierta: {}\n", DB_FILE);
     initSchema();
 }
 
-// ─── initSchema: crea la tabla si no existe ──────────────────────────────────
-// IF NOT EXISTS: esta línea puede ejecutarse 1000 veces sin romper nada.
-// Guardamos el JSON como texto (TEXT) — SQLite no tiene tipo JSON nativo,
-// pero nlohmann nos serializa/deserializa sin esfuerzo.
-// PRIMARY KEY (collection, doc_id): un documento es único por su par
-// colección + id, igual que en Firestore.
-// ─────────────────────────────────────────────────────────────────────────────
+// Schema v2: tenant_id forma parte de la PK para aislamiento multi-tenant.
+// La primera vez que corre en una DB con el schema v1 (sin tenant_id),
+// migra los datos existentes y actualiza la versión.
 void Database::initSchema() {
-    db_.exec(R"(
-        CREATE TABLE IF NOT EXISTS documents (
-            collection  TEXT NOT NULL,
-            doc_id      TEXT NOT NULL,
-            data        TEXT NOT NULL,
-            PRIMARY KEY (collection, doc_id)
-        )
-    )");
+    db_.exec("CREATE TABLE IF NOT EXISTS __schema (key TEXT PRIMARY KEY, value TEXT)");
+
+    int version = 0;
+    try {
+        SQLite::Statement q(db_, "SELECT value FROM __schema WHERE key='version'");
+        if (q.executeStep()) version = std::stoi(q.getColumn(0).getText());
+    } catch (...) {}
+
+    if (version < 2) {
+        // Migrar: si existe la tabla v1, copiar datos; si no, crear directo.
+        db_.exec(R"(
+            CREATE TABLE IF NOT EXISTS documents_v2 (
+                tenant_id   TEXT NOT NULL DEFAULT '',
+                collection  TEXT NOT NULL,
+                doc_id      TEXT NOT NULL,
+                data        TEXT NOT NULL,
+                PRIMARY KEY (tenant_id, collection, doc_id)
+            )
+        )");
+        // Intentar migrar datos del schema anterior (puede no existir)
+        try {
+            db_.exec("INSERT OR IGNORE INTO documents_v2 (tenant_id, collection, doc_id, data) "
+                     "SELECT '', collection, doc_id, data FROM documents");
+            db_.exec("DROP TABLE documents");
+        } catch (...) {}
+        // Si documents_v2 se renombra exitosamente (documents no existe ya)
+        try { db_.exec("ALTER TABLE documents_v2 RENAME TO documents"); }
+        catch (...) {}  // Si documents ya existe (ya migrado), ignorar
+
+        db_.exec("INSERT OR REPLACE INTO __schema VALUES ('version', '2')");
+        fmt::print("📂 SQLite: schema migrado a v2 (tenant_id en PK).\n");
+    }
 }
 
-// ─── save: INSERT OR REPLACE ──────────────────────────────────────────────────
-// INSERT OR REPLACE es el "upsert" de SQLite: si el par (collection, doc_id)
-// ya existe lo reemplaza, si no existe lo crea. Mismo comportamiento que
-// el PATCH que hacía FirebaseClient con Firestore.
-//
-// Statement con '?' (parámetros ligados): NUNCA concatenes strings para SQL.
-// Concatenar es la causa #1 de SQL injection. SQLiteCpp con bind() escapa
-// automáticamente los valores.
-// ─────────────────────────────────────────────────────────────────────────────
-bool Database::save(const std::string& collection, const std::string& docId, const json& data) {
+bool Database::save(const std::string& collection, const std::string& docId,
+                     const json& data, const std::string& tenant_id) {
+    std::lock_guard<std::mutex> lock(mtx_);
     try {
         SQLite::Statement stmt(db_,
-            "INSERT OR REPLACE INTO documents (collection, doc_id, data) VALUES (?, ?, ?)");
-
-        stmt.bind(1, collection);
-        stmt.bind(2, docId);
-        stmt.bind(3, data.dump()); // json → string
-
+            "INSERT OR REPLACE INTO documents (tenant_id, collection, doc_id, data) "
+            "VALUES (?, ?, ?, ?)");
+        stmt.bind(1, tenant_id);
+        stmt.bind(2, collection);
+        stmt.bind(3, docId);
+        stmt.bind(4, data.dump());
         stmt.exec();
-        fmt::print("✅ Guardado: {}/{}\n", collection, docId);
         return true;
-
     } catch (const SQLite::Exception& e) {
-        fmt::print(stderr, "❌ Error DB save ({}/{}): {}\n", collection, docId, e.what());
+        fmt::print(stderr, "❌ Error DB save ({}/{}/{}): {}\n", tenant_id, collection, docId, e.what());
         return false;
     }
 }
 
-// ─── get: SELECT + std::optional ─────────────────────────────────────────────
-// executeStep() avanza al primer resultado. Si devuelve false, no hay fila.
-// Devolvemos std::nullopt (vacío) en vez de nullptr o json inválido —
-// el llamador puede hacer: if (auto doc = db.get(...)) { usar *doc }
-// ─────────────────────────────────────────────────────────────────────────────
-std::optional<json> Database::get(const std::string& collection, const std::string& docId) {
+std::optional<json> Database::get(const std::string& collection, const std::string& docId,
+                                   const std::string& tenant_id) {
+    std::lock_guard<std::mutex> lock(mtx_);
     try {
         SQLite::Statement stmt(db_,
-            "SELECT data FROM documents WHERE collection = ? AND doc_id = ?");
-
-        stmt.bind(1, collection);
-        stmt.bind(2, docId);
-
-        if (stmt.executeStep()) {
-            std::string raw = stmt.getColumn(0).getText();
-            return json::parse(raw); // string → json
-        }
-
-        return std::nullopt; // No encontrado
-
+            "SELECT data FROM documents WHERE tenant_id=? AND collection=? AND doc_id=?");
+        stmt.bind(1, tenant_id);
+        stmt.bind(2, collection);
+        stmt.bind(3, docId);
+        if (stmt.executeStep())
+            return json::parse(stmt.getColumn(0).getText());
+        return std::nullopt;
     } catch (const SQLite::Exception& e) {
-        fmt::print(stderr, "❌ Error DB get ({}/{}): {}\n", collection, docId, e.what());
+        fmt::print(stderr, "❌ Error DB get ({}/{}/{}): {}\n", tenant_id, collection, docId, e.what());
         return std::nullopt;
     }
+}
+
+std::vector<json> Database::list(const std::string& collection, const std::string& tenant_id) {
+    std::lock_guard<std::mutex> lock(mtx_);
+    std::vector<json> results;
+    try {
+        SQLite::Statement stmt(db_,
+            "SELECT data FROM documents WHERE tenant_id=? AND collection=?");
+        stmt.bind(1, tenant_id);
+        stmt.bind(2, collection);
+        while (stmt.executeStep()) {
+            results.push_back(json::parse(stmt.getColumn(0).getText()));
+        }
+    } catch (const SQLite::Exception& e) {
+        fmt::print(stderr, "❌ Error DB list ({}/{}): {}\n", tenant_id, collection, e.what());
+    }
+    return results;
 }
