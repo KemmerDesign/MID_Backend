@@ -3,7 +3,9 @@
 #include "controllers/AuthController.h"
 #include "controllers/CommercialController.h"
 #include "controllers/ProjectController.h"
+#include "controllers/ProductCatalogController.h"
 #include "controllers/EmployeeController.h"
+#include "controllers/RolesController.h"
 #include "utils/PgConnection.h"
 
 using namespace drogon;

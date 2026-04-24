@@ -20,10 +20,15 @@ static Employee rowToEmployee(const PgResult& r, int i) {
     e.ciudad            = r.val(i, "ciudad");
     e.cargo             = r.val(i, "cargo");
     e.departamento      = r.val(i, "departamento");
+    e.tipo_trabajador   = r.val(i, "tipo_trabajador");
     e.tipo_contrato     = r.val(i, "tipo_contrato");
     e.fecha_ingreso     = r.val(i, "fecha_ingreso");
     e.fecha_retiro      = r.val(i, "fecha_retiro");
     e.salario_base      = r.val(i, "salario_base");
+    e.valor_honorarios  = r.val(i, "valor_honorarios");
+    e.periodicidad_pago = r.val(i, "periodicidad_pago");
+    e.objeto_contrato   = r.val(i, "objeto_contrato");
+    e.fecha_fin_contrato= r.val(i, "fecha_fin_contrato");
     e.activo            = r.val(i, "activo") == "t";
     e.notas             = r.val(i, "notas");
     e.created_at        = r.val(i, "created_at");
@@ -51,10 +56,15 @@ json Employee::toJson() const {
         {"ciudad",            ciudad},
         {"cargo",             cargo},
         {"departamento",      departamento},
+        {"tipo_trabajador",    tipo_trabajador.empty() ? json("empleado_directo") : json(tipo_trabajador)},
         {"tipo_contrato",     tipo_contrato},
         {"fecha_ingreso",     fecha_ingreso},
         {"fecha_retiro",      nul(fecha_retiro)},
         {"salario_base",      salario_base.empty() ? json(nullptr) : json(std::stod(salario_base))},
+        {"valor_honorarios",  valor_honorarios.empty() ? json(nullptr) : json(std::stod(valor_honorarios))},
+        {"periodicidad_pago", nul(periodicidad_pago)},
+        {"objeto_contrato",   nul(objeto_contrato)},
+        {"fecha_fin_contrato",nul(fecha_fin_contrato)},
         {"activo",            activo},
         {"notas",             nul(notas)},
         {"created_at",        created_at},
@@ -94,8 +104,7 @@ Employee Employee::create(const std::string& tenant_id, const json& data) {
     );
 
     if (!r.ok() || r.rows() == 0)
-        throw std::runtime_error(std::string("Employee::create: ") +
-                                 (r.res ? PQresultErrorMessage(r.res) : "sin resultado"));
+        throw std::runtime_error(std::string("Employee::create: ") + r.errMsg());
     return rowToEmployee(r, 0);
 }
 

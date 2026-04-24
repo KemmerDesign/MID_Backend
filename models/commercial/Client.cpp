@@ -67,8 +67,7 @@ Client Client::create(const std::string& tenant_id, const json& data) {
     );
 
     if (!result.ok() || result.rows() == 0)
-        throw std::runtime_error(std::string("Client::create: ") +
-                                 (result.res ? PQresultErrorMessage(result.res) : "sin resultado"));
+        throw std::runtime_error(std::string("Client::create: ") + result.errMsg());
     return rowToClient(result, 0);
 }
 

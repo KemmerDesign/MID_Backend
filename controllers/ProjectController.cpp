@@ -1,6 +1,6 @@
 #include "ProjectController.h"
 #include "../models/commercial/Project.h"
-#include "../models/commercial/ProductRequest.h"
+#include "../models/commercial/ProjectProduct.h"
 #include "../utils/JwtUtils.h"
 #include "../utils/PgConnection.h"
 #include <nlohmann/json.hpp>
@@ -92,11 +92,11 @@ void ProjectController::getProject(const HttpRequestPtr& req,
         for (int i = 0; i < appr.rows(); ++i) apprArr.push_back(approvalRowToJson(appr, i));
         body["approvals"] = apprArr;
 
-        // Solicitudes de producto
-        auto prs = ProductRequest::findByProject(id);
-        json prArr = json::array();
-        for (const auto& pr : prs) prArr.push_back(pr.toJson());
-        body["product_requests"] = prArr;
+        // Productos del proyecto (con materiales embebidos)
+        auto products = ProjectProduct::findByProject(id, claims->tenant_id);
+        json prodArr = json::array();
+        for (const auto& p : products) prodArr.push_back(p.toJson());
+        body["products"] = prodArr;
 
         // Equipo del proyecto
         auto members = PgConnection::getInstance().exec(
@@ -152,10 +152,10 @@ void ProjectController::submitProject(const HttpRequestPtr& req,
     }
 }
 
-// ── POST /api/v1/commercial/projects/{id}/product-requests ───────────────────
-void ProjectController::createProductReq(const HttpRequestPtr& req,
-                                          std::function<void(const HttpResponsePtr&)>&& cb,
-                                          std::string&& project_id) {
+// ── POST /api/v1/commercial/projects/{id}/products ────────────────────────────
+void ProjectController::addProduct(const HttpRequestPtr& req,
+                                    std::function<void(const HttpResponsePtr&)>&& cb,
+                                    std::string&& project_id) {
     auto claims = JwtUtils::extractClaims(req);
     if (!claims) { cb(JwtUtils::unauthorized()); return; }
 
@@ -163,38 +163,108 @@ void ProjectController::createProductReq(const HttpRequestPtr& req,
     try { body = json::parse(req->getBody()); }
     catch (...) { cb(jsonResp(k400BadRequest, {{"error","JSON mal formado"}})); return; }
 
-    if (!body.contains("nombre_producto") || body["nombre_producto"].get<std::string>().empty())
-        { cb(jsonResp(k400BadRequest, {{"error","Campo requerido: nombre_producto"}})); return; }
-    if (!body.contains("descripcion_necesidad") || body["descripcion_necesidad"].get<std::string>().empty())
-        { cb(jsonResp(k400BadRequest, {{"error","Campo requerido: descripcion_necesidad"}})); return; }
-    if (!body.contains("cantidad_estimada") || !body["cantidad_estimada"].is_number_integer()
-        || body["cantidad_estimada"].get<int>() < 1)
-        { cb(jsonResp(k400BadRequest, {{"error","cantidad_estimada debe ser un entero mayor a 0"}})); return; }
+    if (!body.contains("nombre") || body["nombre"].get<std::string>().empty())
+        { cb(jsonResp(k400BadRequest, {{"error","Campo requerido: nombre"}})); return; }
+    if (!body.contains("categoria") || body["categoria"].get<std::string>().empty())
+        { cb(jsonResp(k400BadRequest, {{"error","Campo requerido: categoria"}})); return; }
+    if (!body.contains("canal_venta") || body["canal_venta"].get<std::string>().empty())
+        { cb(jsonResp(k400BadRequest, {{"error","Campo requerido: canal_venta"}})); return; }
+    if (!body.contains("temporalidad") || body["temporalidad"].get<std::string>().empty())
+        { cb(jsonResp(k400BadRequest, {{"error","Campo requerido: temporalidad"}})); return; }
 
     try {
-        auto pr = ProductRequest::create(project_id, claims->tenant_id, claims->user_id, body);
-        cb(jsonResp(k201Created, {{"product_request", pr.toJson()}}));
+        auto product = ProjectProduct::create(project_id, claims->tenant_id, body);
+        cb(jsonResp(k201Created, {{"product", product.toJson()}}));
     } catch (const std::exception& e) {
         std::string msg = e.what();
         if (msg.find("violates foreign key") != std::string::npos)
             cb(jsonResp(k400BadRequest, {{"error","project_id inválido"}}));
+        else if (msg.find("violates check") != std::string::npos)
+            cb(jsonResp(k400BadRequest, {{"error","Valor inválido en canal_venta o temporalidad"}}));
         else
             cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
     }
 }
 
-// ── GET /api/v1/commercial/projects/{id}/product-requests ────────────────────
-void ProjectController::listProductReqs(const HttpRequestPtr& req,
-                                         std::function<void(const HttpResponsePtr&)>&& cb,
-                                         std::string&& project_id) {
+// ── GET /api/v1/commercial/projects/{id}/products ─────────────────────────────
+void ProjectController::listProducts(const HttpRequestPtr& req,
+                                      std::function<void(const HttpResponsePtr&)>&& cb,
+                                      std::string&& project_id) {
     auto claims = JwtUtils::extractClaims(req);
     if (!claims) { cb(JwtUtils::unauthorized()); return; }
 
     try {
-        auto prs = ProductRequest::findByProject(project_id);
+        auto products = ProjectProduct::findByProject(project_id, claims->tenant_id);
         json arr = json::array();
-        for (const auto& pr : prs) arr.push_back(pr.toJson());
-        cb(jsonResp(k200OK, {{"product_requests", arr}, {"total", arr.size()}}));
+        for (const auto& p : products) arr.push_back(p.toJson());
+        cb(jsonResp(k200OK, {{"products", arr}, {"total", arr.size()}}));
+    } catch (const std::exception&) {
+        cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
+    }
+}
+
+// ── DELETE /api/v1/commercial/projects/{id}/products/{pid} ───────────────────
+void ProjectController::removeProduct(const HttpRequestPtr& req,
+                                       std::function<void(const HttpResponsePtr&)>&& cb,
+                                       std::string&& project_id,
+                                       std::string&& product_id) {
+    auto claims = JwtUtils::extractClaims(req);
+    if (!claims) { cb(JwtUtils::unauthorized()); return; }
+    (void)project_id;
+
+    try {
+        bool ok = ProjectProduct::remove(product_id, claims->tenant_id);
+        if (!ok) { cb(jsonResp(k404NotFound, {{"error","Producto no encontrado"}})); return; }
+        cb(jsonResp(k200OK, {{"message","Producto eliminado del proyecto"}}));
+    } catch (const std::exception&) {
+        cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
+    }
+}
+
+// ── POST /api/v1/commercial/projects/{id}/products/{pid}/materials ────────────
+void ProjectController::addMaterial(const HttpRequestPtr& req,
+                                     std::function<void(const HttpResponsePtr&)>&& cb,
+                                     std::string&& project_id,
+                                     std::string&& product_id) {
+    auto claims = JwtUtils::extractClaims(req);
+    if (!claims) { cb(JwtUtils::unauthorized()); return; }
+    (void)project_id;
+
+    json body;
+    try { body = json::parse(req->getBody()); }
+    catch (...) { cb(jsonResp(k400BadRequest, {{"error","JSON mal formado"}})); return; }
+
+    if (!body.contains("tipo_material") || body["tipo_material"].get<std::string>().empty())
+        { cb(jsonResp(k400BadRequest, {{"error","Campo requerido: tipo_material"}})); return; }
+
+    try {
+        auto mat = ProjectProduct::addMaterial(product_id, claims->tenant_id, body, claims->user_id);
+        cb(jsonResp(k201Created, {{"material", mat.toJson()}}));
+    } catch (const std::exception& e) {
+        std::string msg = e.what();
+        if (msg.find("violates check") != std::string::npos)
+            cb(jsonResp(k400BadRequest, {{"error","tipo_material inválido"}}));
+        else if (msg.find("violates foreign key") != std::string::npos)
+            cb(jsonResp(k400BadRequest, {{"error","product_id inválido"}}));
+        else
+            cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
+    }
+}
+
+// ── DELETE /api/v1/commercial/projects/{id}/products/{pid}/materials/{mid} ────
+void ProjectController::removeMaterial(const HttpRequestPtr& req,
+                                        std::function<void(const HttpResponsePtr&)>&& cb,
+                                        std::string&& project_id,
+                                        std::string&& product_id,
+                                        std::string&& material_id) {
+    auto claims = JwtUtils::extractClaims(req);
+    if (!claims) { cb(JwtUtils::unauthorized()); return; }
+    (void)project_id;
+
+    try {
+        bool ok = ProjectProduct::removeMaterial(material_id, product_id, claims->tenant_id);
+        if (!ok) { cb(jsonResp(k404NotFound, {{"error","Material no encontrado"}})); return; }
+        cb(jsonResp(k200OK, {{"message","Material eliminado"}}));
     } catch (const std::exception&) {
         cb(jsonResp(k500InternalServerError, {{"error","Error interno del servidor"}}));
     }

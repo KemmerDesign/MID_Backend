@@ -42,8 +42,12 @@ add_executable(MiBackendMonarca
     controllers/CommercialController.cpp
     controllers/ProjectController.h
     controllers/ProjectController.cpp
+    controllers/ProductCatalogController.h
+    controllers/ProductCatalogController.cpp
     controllers/EmployeeController.h
     controllers/EmployeeController.cpp
+    controllers/RolesController.h
+    controllers/RolesController.cpp
     controllers/FinanceController.h
     controllers/FinanceController.cpp
     controllers/SupplierController.h
@@ -59,10 +63,24 @@ add_executable(MiBackendMonarca
     models/commercial/Client.cpp
     models/commercial/Project.h
     models/commercial/Project.cpp
-    models/commercial/ProductRequest.h
-    models/commercial/ProductRequest.cpp
+    models/commercial/ProductCatalog.h
+    models/commercial/ProductCatalog.cpp
+    models/commercial/ProjectProduct.h
+    models/commercial/ProjectProduct.cpp
     models/rrhh/Employee.h
     models/rrhh/Employee.cpp
+    models/rrhh/Role.h
+    models/rrhh/Role.cpp
+    models/rrhh/EmployeePosition.h
+    models/rrhh/EmployeePosition.cpp
+    models/rrhh/EmployeeDependent.h
+    models/rrhh/EmployeeDependent.cpp
+    models/rrhh/EmployeeAbsence.h
+    models/rrhh/EmployeeAbsence.cpp
+    models/rrhh/EmployeeVacation.h
+    models/rrhh/EmployeeVacation.cpp
+    models/rrhh/EmployeeDisciplinary.h
+    models/rrhh/EmployeeDisciplinary.cpp
     models/rawMaterial/MetalMaterial.h
     models/rawMaterial/MetalMaterial.cc
     utils/Database.h

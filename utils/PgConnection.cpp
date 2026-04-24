@@ -8,15 +8,8 @@ PgConnection& PgConnection::getInstance() {
     return instance;
 }
 
-PgConnection::PgConnection() {
+PgConnection::PgConnection() : conn_(nullptr, &PQfinish) {
     connect();
-}
-
-PgConnection::~PgConnection() {
-    if (conn_) {
-        PQfinish(conn_);
-        conn_ = nullptr;
-    }
 }
 
 std::string PgConnection::buildConnStr() {
@@ -40,52 +33,44 @@ std::string PgConnection::buildConnStr() {
 }
 
 void PgConnection::connect() {
-    std::string connStr = buildConnStr();
-    conn_ = PQconnectdb(connStr.c_str());
+    conn_.reset(PQconnectdb(buildConnStr().c_str()));
 
-    if (PQstatus(conn_) != CONNECTION_OK) {
-        std::string err = PQerrorMessage(conn_);
-        PQfinish(conn_);
-        conn_ = nullptr;
+    if (PQstatus(conn_.get()) != CONNECTION_OK) {
+        std::string err = PQerrorMessage(conn_.get());
+        conn_.reset();
         throw std::runtime_error("PgConnection: no se pudo conectar a PostgreSQL — " + err);
     }
 
-    fmt::print("🐘 PostgreSQL conectado: {}\n", PQdb(conn_));
+    fmt::print("🐘 PostgreSQL conectado: {}\n", PQdb(conn_.get()));
 }
 
 bool PgConnection::isConnected() const {
-    return conn_ && PQstatus(conn_) == CONNECTION_OK;
+    return conn_ && PQstatus(conn_.get()) == CONNECTION_OK;
 }
 
 PgResult PgConnection::exec(const std::string& sql,
                              const std::vector<std::string>& params) {
-    // Reconectar si la conexión se perdió (ej. restart del servidor)
     if (!isConnected()) {
-        PQreset(conn_);
-        if (!isConnected()) {
+        PQreset(conn_.get());
+        if (!isConnected())
             throw std::runtime_error("PgConnection: conexión perdida y no se pudo recuperar");
-        }
     }
 
-    if (params.empty()) {
-        return PgResult(PQexec(conn_, sql.c_str()));
-    }
+    if (params.empty())
+        return PgResult(PQexec(conn_.get(), sql.c_str()));
 
-    // Convertir vector<string> → array de const char* para PQexecParams
     std::vector<const char*> cParams;
     cParams.reserve(params.size());
-    for (const auto& p : params) {
-        cParams.push_back(p.c_str());
-    }
+    for (const auto& p : params) cParams.push_back(p.c_str());
 
     return PgResult(PQexecParams(
-        conn_,
+        conn_.get(),
         sql.c_str(),
         static_cast<int>(cParams.size()),
-        nullptr,      // tipos inferidos por PostgreSQL
+        nullptr,
         cParams.data(),
-        nullptr,      // longitudes (null = tratar como C-string)
-        nullptr,      // formatos (null = texto)
-        0             // resultado en formato texto
+        nullptr,
+        nullptr,
+        0
     ));
 }

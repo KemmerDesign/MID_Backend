@@ -24,10 +24,16 @@ struct Employee {
     std::string ciudad;
     std::string cargo;
     std::string departamento;
+    std::string tipo_trabajador;  // empleado_directo | contratista
     std::string tipo_contrato;
     std::string fecha_ingreso;
     std::string fecha_retiro;
     std::string salario_base;
+    // Campos exclusivos de contratistas
+    std::string valor_honorarios;
+    std::string periodicidad_pago;
+    std::string objeto_contrato;
+    std::string fecha_fin_contrato;
     bool        activo = true;
     std::string notas;
     std::string created_at;

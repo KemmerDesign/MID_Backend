@@ -64,8 +64,7 @@ Project Project::create(const std::string& tenant_id,
     );
 
     if (!r.ok() || r.rows() == 0)
-        throw std::runtime_error(std::string("Project::create: ") +
-                                 (r.res ? PQresultErrorMessage(r.res) : "sin resultado"));
+        throw std::runtime_error(std::string("Project::create: ") + r.errMsg());
     return rowToProject(r, 0);
 }
 

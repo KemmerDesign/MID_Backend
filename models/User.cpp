@@ -16,8 +16,7 @@ User User::create(const std::string& tenant_id,
 
     if (!result.ok() || result.rows() == 0) {
         // PQresultErrorMessage nos da el detalle (ej. violación de UNIQUE)
-        throw std::runtime_error(std::string("User::create falló: ") +
-                                 (result.res ? PQresultErrorMessage(result.res) : "sin resultado"));
+        throw std::runtime_error(std::string("User::create falló: ") + result.errMsg());
     }
 
     User u;
