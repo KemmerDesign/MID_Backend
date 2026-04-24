@@ -6,6 +6,7 @@
     "nlohmann-json",
     "sqlitecpp",
     "cpr",
-    "fmt"
+    "fmt",
+    "jwt-cpp"
   ]
 }

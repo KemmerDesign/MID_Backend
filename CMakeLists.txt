@@ -13,7 +13,6 @@ endif()
 
 message(STATUS "🔨 Modo de compilación: ${CMAKE_BUILD_TYPE}")
 
-# En Debug activamos la bandera MONARCA_DEV para logs detallados
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     add_compile_definitions(MONARCA_DEV)
     add_compile_definitions(DROGON_DEBUG_MODE)
@@ -30,10 +29,21 @@ find_package(nlohmann_json CONFIG REQUIRED)
 find_package(SQLiteCpp CONFIG REQUIRED)
 find_package(cpr       CONFIG REQUIRED)
 find_package(fmt       CONFIG REQUIRED)
+find_package(jwt-cpp   CONFIG REQUIRED)
+find_package(PostgreSQL REQUIRED)
+find_package(OpenSSL   REQUIRED)
 
 # 5. Definir el ejecutable
 add_executable(MiBackendMonarca
     main.cc
+    controllers/AuthController.h
+    controllers/AuthController.cpp
+    controllers/CommercialController.h
+    controllers/CommercialController.cpp
+    controllers/ProjectController.h
+    controllers/ProjectController.cpp
+    controllers/EmployeeController.h
+    controllers/EmployeeController.cpp
     controllers/FinanceController.h
     controllers/FinanceController.cpp
     controllers/SupplierController.h
@@ -43,12 +53,30 @@ add_executable(MiBackendMonarca
     models/Client.cc
     models/Supplier.h
     models/Supplier.cpp
+    models/User.h
+    models/User.cpp
+    models/commercial/Client.h
+    models/commercial/Client.cpp
+    models/commercial/Project.h
+    models/commercial/Project.cpp
+    models/commercial/ProductRequest.h
+    models/commercial/ProductRequest.cpp
+    models/rrhh/Employee.h
+    models/rrhh/Employee.cpp
     models/rawMaterial/MetalMaterial.h
     models/rawMaterial/MetalMaterial.cc
     utils/Database.h
     utils/Database.cpp
+    utils/PgConnection.h
+    utils/PgConnection.cpp
+    utils/CryptoUtils.h
+    utils/CryptoUtils.cpp
+    utils/JwtUtils.h
+    utils/JwtUtils.cpp
     utils/Adress.h
     utils/Adress.cc
+    utils/FirebaseClient.h
+    utils/FirebaseClient.cpp
 )
 
 # 6. Enlazar librerías
@@ -58,4 +86,8 @@ target_link_libraries(MiBackendMonarca PRIVATE
     SQLiteCpp
     cpr::cpr
     fmt::fmt
+    jwt-cpp::jwt-cpp
+    PostgreSQL::PostgreSQL
+    OpenSSL::SSL
+    OpenSSL::Crypto
 )
